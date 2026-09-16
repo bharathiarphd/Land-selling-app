@@ -1,0 +1,18 @@
+.logo {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-2);
+  color: var(--color-primary);
+  font-weight: var(--font-weight-bold);
+  font-size: var(--font-size-xl);
+}
+
+.icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--color-primary-light);
+  color: var(--color-primary);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-1);
+}

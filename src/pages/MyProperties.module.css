@@ -1,0 +1,306 @@
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: var(--spacing-6) 0 var(--spacing-16);
+}
+
+.header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-4);
+  margin-bottom: var(--spacing-8);
+}
+
+@media (min-width: 768px) {
+  .header {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: flex-end;
+  }
+}
+
+.title {
+  font-size: var(--font-size-2xl);
+  font-weight: var(--font-weight-bold);
+  margin-bottom: var(--spacing-1);
+}
+
+.subtitle {
+  color: var(--color-text-secondary);
+}
+
+.headerActions {
+  display: flex;
+  gap: var(--spacing-3);
+  align-items: center;
+}
+
+/* Stats Summary */
+.statsGrid {
+  display: flex;
+  overflow-x: auto;
+  gap: var(--spacing-4);
+  margin-bottom: var(--spacing-8);
+  padding-bottom: var(--spacing-2);
+  scrollbar-width: none;
+}
+.statsGrid::-webkit-scrollbar {
+  display: none;
+}
+
+@media (min-width: 768px) {
+  .statsGrid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    overflow-x: visible;
+  }
+}
+
+.statCard {
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-4);
+  min-width: 140px;
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-1);
+}
+
+.statValue {
+  font-size: var(--font-size-2xl);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-primary);
+}
+
+.statLabel {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  font-weight: var(--font-weight-medium);
+}
+
+/* Controls */
+.controlsBar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-4);
+  margin-bottom: var(--spacing-6);
+}
+
+@media (min-width: 768px) {
+  .controlsBar {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
+}
+
+.searchWrap {
+  flex: 1;
+  max-width: 400px;
+}
+
+.filterSortWrap {
+  display: flex;
+  gap: var(--spacing-3);
+}
+
+/* Active Filters */
+.activeFilters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-2);
+  margin-bottom: var(--spacing-6);
+  align-items: center;
+}
+
+.filterChip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-1);
+  background-color: var(--color-primary-light);
+  color: var(--color-primary-dark);
+  padding: 4px 12px;
+  border-radius: var(--radius-full);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+}
+
+.removeChip {
+  cursor: pointer;
+}
+
+.clearAllBtn {
+  background: none;
+  border: none;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+/* List/Cards */
+.propertyList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-4);
+}
+
+.propertyCard {
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  box-shadow: var(--shadow-sm);
+}
+
+@media (min-width: 768px) {
+  .propertyCard {
+    flex-direction: row;
+    height: 180px;
+  }
+}
+
+.cardImage {
+  width: 100%;
+  height: 200px;
+  background-color: var(--color-background);
+  position: relative;
+}
+@media (min-width: 768px) {
+  .cardImage {
+    width: 240px;
+    height: 100%;
+    flex-shrink: 0;
+  }
+}
+
+.cardImage img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.statusBadge {
+  position: absolute;
+  top: var(--spacing-2);
+  left: var(--spacing-2);
+  padding: 4px 10px;
+  border-radius: var(--radius-full);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
+  color: white;
+  text-transform: uppercase;
+}
+.status-published, .status-available { background-color: var(--color-success); }
+.status-draft { background-color: var(--color-text-secondary); }
+.status-pending { background-color: #f59e0b; }
+.status-rejected { background-color: var(--color-error); }
+.status-inactive { background-color: #6b7280; }
+.status-sold { background-color: var(--color-primary-dark); }
+
+.cardContent {
+  padding: var(--spacing-4);
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.cardHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: var(--spacing-2);
+}
+
+.cardTitle {
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-bold);
+  margin-bottom: 4px;
+}
+
+.cardId {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+}
+
+.cardPrice {
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-primary);
+}
+
+.cardDetails {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-4);
+  margin-bottom: var(--spacing-4);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.cardActions {
+  margin-top: auto;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-top: 1px solid var(--color-border);
+  padding-top: var(--spacing-3);
+}
+
+.actionBtns {
+  display: flex;
+  gap: var(--spacing-2);
+}
+
+.moreMenuWrapper {
+  position: relative;
+}
+
+.moreBtn {
+  background: none;
+  border: none;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  padding: var(--spacing-1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-full);
+}
+.moreBtn:hover {
+  background-color: var(--color-background);
+}
+
+.dropdownMenu {
+  position: absolute;
+  right: 0;
+  bottom: 100%;
+  margin-bottom: var(--spacing-2);
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+  min-width: 160px;
+  z-index: 10;
+  padding: var(--spacing-1) 0;
+}
+
+.dropdownItem {
+  width: 100%;
+  text-align: left;
+  padding: var(--spacing-2) var(--spacing-4);
+  background: none;
+  border: none;
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+}
+.dropdownItem:hover {
+  background-color: var(--color-background);
+}
+.dropdownItem.danger {
+  color: var(--color-error);
+}

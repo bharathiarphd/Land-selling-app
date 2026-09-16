@@ -1,0 +1,214 @@
+/* Hero Section */
+.hero {
+  text-align: center;
+  padding: var(--spacing-8) 0 var(--spacing-10);
+}
+
+.heroTitle {
+  font-size: var(--font-size-4xl);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-primary-dark);
+  margin-bottom: var(--spacing-2);
+  line-height: var(--line-height-tight);
+}
+
+.heroSubtitle {
+  font-size: var(--font-size-lg);
+  color: var(--color-text-secondary);
+  margin-bottom: var(--spacing-8);
+  max-width: 600px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.searchContainer {
+  max-width: 600px;
+  margin: 0 auto var(--spacing-6);
+  position: relative;
+}
+
+.locationWrapper {
+  display: flex;
+  justify-content: center;
+  margin-bottom: var(--spacing-4);
+}
+
+.heroActions {
+  display: flex;
+  gap: var(--spacing-4);
+  justify-content: center;
+}
+
+/* Sections General */
+.section {
+  padding: var(--spacing-8) 0;
+}
+
+.sectionHeader {
+  margin-bottom: var(--spacing-6);
+}
+
+.sectionTitle {
+  font-size: var(--font-size-2xl);
+  font-weight: var(--font-weight-bold);
+  margin-bottom: var(--spacing-1);
+}
+
+.sectionSubtitle {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-base);
+}
+
+/* Categories (Horizontal Scroll) */
+.categoriesScroll {
+  display: flex;
+  overflow-x: auto;
+  gap: var(--spacing-4);
+  padding-bottom: var(--spacing-4);
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE/Edge */
+}
+.categoriesScroll::-webkit-scrollbar {
+  display: none; /* Chrome/Safari */
+}
+
+.categoryCard {
+  flex: 0 0 auto;
+  width: 120px;
+  height: 120px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-2);
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.categoryCard:hover {
+  border-color: var(--color-primary);
+  background-color: var(--color-primary-light);
+}
+
+.categoryIcon {
+  font-size: 32px;
+}
+
+.categoryName {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  text-align: center;
+}
+
+/* Property Grids */
+.propertyGrid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--spacing-4);
+}
+
+@media (min-width: 768px) {
+  .propertyGrid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (min-width: 1024px) {
+  .propertyGrid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+/* Popular Locations Grid */
+.locationsGrid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--spacing-4);
+}
+
+@media (min-width: 768px) {
+  .locationsGrid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+.locationCard {
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-4);
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-3);
+  cursor: pointer;
+  transition: box-shadow 0.2s;
+}
+
+.locationCard:hover {
+  box-shadow: var(--shadow-md);
+  border-color: var(--color-primary);
+}
+
+/* Trust Sections (Verified, Why Choose Us, How it Works) */
+.featureGrid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--spacing-6);
+}
+
+@media (min-width: 768px) {
+  .featureGrid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+.featureCard {
+  background-color: var(--color-surface);
+  padding: var(--spacing-6);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-border);
+  text-align: center;
+}
+
+.featureIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 64px;
+  background-color: var(--color-primary-light);
+  color: var(--color-primary);
+  border-radius: var(--radius-full);
+  margin-bottom: var(--spacing-4);
+}
+
+/* CTA Section */
+.cta {
+  background-color: var(--color-primary);
+  color: var(--color-text-inverse);
+  padding: var(--spacing-10) var(--spacing-4);
+  border-radius: var(--radius-2xl);
+  text-align: center;
+  margin: var(--spacing-12) 0;
+}
+
+.ctaTitle {
+  font-size: var(--font-size-3xl);
+  font-weight: var(--font-weight-bold);
+  margin-bottom: var(--spacing-2);
+}
+
+.ctaSubtitle {
+  font-size: var(--font-size-lg);
+  opacity: 0.9;
+  margin-bottom: var(--spacing-8);
+}
+
+.ctaActions {
+  display: flex;
+  justify-content: center;
+  gap: var(--spacing-4);
+}
