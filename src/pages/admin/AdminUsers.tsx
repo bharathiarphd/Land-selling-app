@@ -1,17 +1,72 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Input } from '../../components/Input';
 import { Button } from '../../components/Button';
 import styles from './Admin.module.css';
 
-// Mock users
-const mockUsers = [
-  { id: '1', name: 'Ramesh Kumar', phone: '9876543210', role: 'Seller', status: 'Active', registered: '2023-10-10' },
-  { id: '2', name: 'Suresh Iyer', phone: '9876543211', role: 'Buyer', status: 'Active', registered: '2023-10-12' },
-  { id: '3', name: 'Priya Properties', phone: '9876543212', role: 'Agent', status: 'Suspended', registered: '2023-10-15' },
-];
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
+const AUTH_STORAGE_KEY = 'land_selling_app_token';
 
 export default function AdminUsers() {
+  const [users, setUsers] = useState<any[]>([]);
   const [search, setSearch] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  const fetchUsers = async () => {
+    try {
+      setLoading(true);
+      const token = localStorage.getItem(AUTH_STORAGE_KEY);
+      if (!token) return;
+      
+      const response = await fetch(`${BACKEND_URL}/api/admin/users`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to fetch users');
+      }
+      
+      const data = await response.json();
+      setUsers(data);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchUsers();
+  }, []);
+
+  const handleDeleteUser = async (id: string) => {
+    if (!window.confirm('Are you sure you want to delete this user?')) return;
+    
+    try {
+      const token = localStorage.getItem(AUTH_STORAGE_KEY);
+      if (!token) return;
+      
+      const response = await fetch(`${BACKEND_URL}/api/admin/users/${id}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      if (!response.ok) throw new Error('Failed to delete user');
+      
+      setUsers(users.filter(u => u._id !== id));
+    } catch (err: any) {
+      alert(err.message);
+    }
+  };
+
+  const filteredUsers = users.filter(user => 
+    (user.name && user.name.toLowerCase().includes(search.toLowerCase())) ||
+    (user.email && user.email.toLowerCase().includes(search.toLowerCase()))
+  );
 
   return (
     <div>
@@ -19,16 +74,18 @@ export default function AdminUsers() {
         <h1 className="h2">User Management</h1>
       </div>
 
+      {error && <div style={{ color: 'red', marginBottom: '1rem' }}>{error}</div>}
+
       <div style={{ backgroundColor: 'var(--color-surface)', borderRadius: 'var(--radius-lg)', padding: 'var(--spacing-4)', border: '1px solid var(--color-border)', marginBottom: 'var(--spacing-6)' }}>
         <div style={{ display: 'flex', gap: 'var(--spacing-4)', flexWrap: 'wrap' }}>
           <div style={{ flex: 1, minWidth: '250px' }}>
             <Input 
-              placeholder="Search users by name or phone..." 
+              placeholder="Search users by name or email..." 
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>
-          <Button variant="outline">Filter by Role</Button>
+          <Button variant="outline" onClick={fetchUsers}>Refresh</Button>
         </div>
       </div>
 
@@ -39,36 +96,39 @@ export default function AdminUsers() {
               <tr>
                 <th>ID</th>
                 <th>Name</th>
-                <th>Phone</th>
+                <th>Email</th>
                 <th>Role</th>
-                <th>Status</th>
                 <th>Registered</th>
                 <th>Actions</th>
               </tr>
             </thead>
             <tbody>
-              {mockUsers.map(user => (
-                <tr key={user.id}>
-                  <td className={styles.tdId}>#{user.id}</td>
-                  <td>{user.name}</td>
-                  <td>{user.phone}</td>
-                  <td><span className={styles.roleBadge}>{user.role}</span></td>
-                  <td>
-                    <span className={`${styles.statusBadge} ${user.status === 'Active' ? styles.statusActive : styles.statusInactive}`}>
-                      {user.status}
-                    </span>
-                  </td>
-                  <td>{user.registered}</td>
-                  <td>
-                    <div style={{ display: 'flex', gap: '8px' }}>
-                      <button className={styles.actionLink}>View</button>
-                      <button className={styles.actionLink} style={{ color: user.status === 'Active' ? 'var(--color-error)' : 'var(--color-success)' }}>
-                        {user.status === 'Active' ? 'Suspend' : 'Activate'}
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
+              {loading ? (
+                <tr><td colSpan={6} style={{ textAlign: 'center', padding: '1rem' }}>Loading users...</td></tr>
+              ) : filteredUsers.length === 0 ? (
+                <tr><td colSpan={6} style={{ textAlign: 'center', padding: '1rem' }}>No users found</td></tr>
+              ) : (
+                filteredUsers.map(user => (
+                  <tr key={user._id}>
+                    <td className={styles.tdId}>#{user._id.substring(0, 8)}...</td>
+                    <td>{user.name || 'N/A'}</td>
+                    <td>{user.email}</td>
+                    <td><span className={styles.roleBadge}>{user.role}</span></td>
+                    <td>{new Date(user.createdAt).toLocaleDateString()}</td>
+                    <td>
+                      <div style={{ display: 'flex', gap: '8px' }}>
+                        <button 
+                          className={styles.actionLink} 
+                          style={{ color: 'var(--color-error)' }}
+                          onClick={() => handleDeleteUser(user._id)}
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>

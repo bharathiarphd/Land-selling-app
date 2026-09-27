@@ -69,11 +69,10 @@ export default function VerifyOTP() {
   const handleResend = async () => {
     setTimer(30);
     setError('');
-    // Mock re-send logic
     try {
       if (phone) await authService.sendOtp(phone);
-    } catch (e) {
-      console.error(e);
+    } catch (e: any) {
+      setError(e.message || 'Failed to resend OTP');
     }
   };
 
@@ -131,9 +130,7 @@ export default function VerifyOTP() {
       </div>
 
       <div className={styles.formCard}>
-        <div style={{ padding: 'var(--spacing-3)', backgroundColor: 'var(--color-primary-light)', color: 'var(--color-primary-dark)', borderRadius: 'var(--radius-md)', textAlign: 'center', marginBottom: 'var(--spacing-6)', fontWeight: 'var(--font-weight-medium)' }}>
-          Demo OTP: 123456
-        </div>
+        <div id="recaptcha-container"></div>
 
         <form onSubmit={handleSubmit}>
           <div style={{ display: 'flex', gap: 'var(--spacing-2)', justifyContent: 'space-between', marginBottom: 'var(--spacing-6)' }}>

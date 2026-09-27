@@ -53,16 +53,14 @@ export default function Register() {
     setIsLoading(true);
 
     try {
-      // Mock OTP send
       await authService.sendOtp(formData.phone);
       
-      // Store registration data to be consumed by verify-otp
       sessionStorage.setItem('pending_auth_phone', formData.phone);
       sessionStorage.setItem('pending_registration', JSON.stringify(formData as RegisterData));
       
       navigate('/verify-otp');
-    } catch (err) {
-      setErrors({ submit: language === 'ta' ? 'கணக்கை உருவாக்க முடியவில்லை. மீண்டும் முயற்சிக்கவும்.' : 'Unable to create account. Please try again.' });
+    } catch (err: any) {
+      setErrors({ submit: err.message || (language === 'ta' ? 'கணக்கை உருவாக்க முடியவில்லை. மீண்டும் முயற்சிக்கவும்.' : 'Unable to create account. Please try again.') });
     } finally {
       setIsLoading(false);
     }
@@ -95,11 +93,11 @@ export default function Register() {
           <label style={{ display: 'block', marginBottom: 'var(--spacing-2)', fontWeight: 'var(--font-weight-medium)' }}>
             {t('auth.mobileNumber')}
           </label>
-          <div className={styles.phoneInputGroup}>
-            <div className={styles.countryCode}>
+          <div className={styles.phoneInputGroup} style={{ display: 'flex', gap: '0.5rem', marginBottom: 'var(--spacing-4)' }}>
+            <div className={styles.countryCode} style={{ width: '60px' }}>
               <Input value="+91" disabled />
             </div>
-            <div className={styles.phoneNumber}>
+            <div className={styles.phoneNumber} style={{ flex: 1 }}>
               <Input 
                 type="tel"
                 placeholder={t('auth.mobilePlaceholder')}
@@ -158,6 +156,8 @@ export default function Register() {
             {isLoading ? (language === 'ta' ? 'கணக்கு உருவாக்கப்படுகிறது...' : 'Creating Account...') : t('auth.createAccount')}
           </Button>
         </form>
+        
+        <div id="recaptcha-container"></div>
 
         <div className={styles.footer}>
           {language === 'ta' ? 'ஏற்கனவே கணக்கு உள்ளதா?' : 'Already have an account?'} <Link to="/login" className={styles.link}>{t('auth.login')}</Link>

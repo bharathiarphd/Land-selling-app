@@ -16,11 +16,7 @@ export default function Login() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Validate Indian mobile numbers (10 digits starting with 6-9)
-  const validatePhone = (p: string) => {
-    const phoneRegex = /^[6-9]\d{9}$/;
-    return phoneRegex.test(p);
-  };
+  const validatePhone = (p: string) => /^[6-9]\d{9}$/.test(p);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -39,17 +35,12 @@ export default function Login() {
     setIsLoading(true);
 
     try {
-      // Mock API call
       await authService.sendOtp(phone);
-      
-      // Store phone in session storage temporarily for OTP verification
       sessionStorage.setItem('pending_auth_phone', phone);
-      
-      // Pass along the `from` state if we were redirected from a protected route
       const state = location.state as { from?: Location };
       navigate('/verify-otp', { state: { from: state?.from } });
-    } catch {
-      setError(language === 'ta' ? 'OTP அனுப்புவதில் தோல்வி. மீண்டும் முயற்சிக்கவும்.' : 'Failed to send OTP. Please try again.');
+    } catch (err: any) {
+      setError(err.message || 'Failed to send OTP. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -71,11 +62,11 @@ export default function Login() {
           <label style={{ display: 'block', marginBottom: 'var(--spacing-2)', fontWeight: 'var(--font-weight-medium)' }}>
             {t('auth.mobileNumber')}
           </label>
-          <div className={styles.phoneInputGroup}>
-            <div className={styles.countryCode}>
+          <div className={styles.phoneInputGroup} style={{ marginBottom: '1rem', display: 'flex', gap: '0.5rem' }}>
+            <div className={styles.countryCode} style={{ width: '60px' }}>
               <Input value="+91" disabled />
             </div>
-            <div className={styles.phoneNumber}>
+            <div className={styles.phoneNumber} style={{ flex: 1 }}>
               <Input 
                 type="tel"
                 placeholder={t('auth.mobilePlaceholder')}
@@ -95,6 +86,8 @@ export default function Login() {
             {isLoading ? (language === 'ta' ? 'OTP அனுப்பப்படுகிறது...' : 'Sending OTP...') : t('auth.sendOtp')}
           </Button>
         </form>
+
+        <div id="recaptcha-container"></div>
 
         <div className={styles.footer}>
           {language === 'ta' ? 'நிலம் விற்பனை செயலியில் புதியவரா?' : 'New to Land Selling App?'} <Link to="/register" className={styles.link}>{t('auth.register')}</Link>
