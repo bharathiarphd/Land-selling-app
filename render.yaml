@@ -1,0 +1,25 @@
+services:
+  - type: web
+    name: landsellingapp-backend
+    env: node
+    rootDir: server
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: MONGODB_URI
+        sync: false
+      - key: FIREBASE_SERVICE_ACCOUNT
+        sync: false
+
+  - type: web
+    name: landsellingapp-frontend
+    env: static
+    buildCommand: npm install && npm run build
+    publishPath: dist
+    envVars:
+      - key: VITE_BACKEND_URL
+        sync: false
+      - key: VITE_GOOGLE_MAPS_API_KEY
+        sync: false
+      - key: VITE_USE_MOCK_API
+        sync: false

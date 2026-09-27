@@ -7,7 +7,9 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "start": "cd server && npm start",
+    "render-build": "npm install && npm run build && cd server && npm install"
   },
   "dependencies": {
     "firebase": "^12.19.0",
