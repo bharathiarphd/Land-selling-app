@@ -160,6 +160,9 @@
     "publish": "Publish Property"
   },
   "auth": {
+    "login": "Login to your account",
+    "loginSubtitle": "Enter your mobile number to proceed",
+    "registerSubtitle": "Create an account to start buying and selling land",
     "welcomeBack": "Welcome Back",
     "mobileNumber": "Mobile Number",
     "sendOtp": "Send OTP",
