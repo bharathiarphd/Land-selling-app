@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { 
   Users, Home, IndianRupee, ShieldAlert, FileText, CheckCircle, 
   TrendingUp, TrendingDown, Plus, Eye, Download, FileSpreadsheet, MapPin, Clock
@@ -7,49 +7,73 @@ import {
   AreaChart, Area, LineChart, Line, XAxis, YAxis, CartesianGrid, 
   Tooltip, ResponsiveContainer, Legend, PieChart, Pie, Cell
 } from 'recharts';
-
-// --- MOCK DATA ---
-const revenueData = [
-  { name: 'Jan', subscription: 120000, listing: 45000, agents: 15000 },
-  { name: 'Feb', subscription: 135000, listing: 52000, agents: 18000 },
-  { name: 'Mar', subscription: 140000, listing: 48000, agents: 22000 },
-  { name: 'Apr', subscription: 180000, listing: 65000, agents: 25000 },
-  { name: 'May', subscription: 195000, listing: 70000, agents: 30000 },
-  { name: 'Jun', subscription: 210000, listing: 85000, agents: 35000 },
-  { name: 'Jul', subscription: 230000, listing: 95000, agents: 40000 },
-];
-
-const platformGrowthData = [
-  { name: 'W1', users: 120, properties: 45, views: 1200, enquiries: 150 },
-  { name: 'W2', users: 150, properties: 60, views: 1800, enquiries: 210 },
-  { name: 'W3', users: 180, properties: 85, views: 2400, enquiries: 320 },
-  { name: 'W4', users: 240, properties: 110, views: 3500, enquiries: 450 },
-];
-
-const userPieData = [
-  { name: 'Buyers', value: 650, color: '#3b82f6' },
-  { name: 'Sellers', value: 450, color: '#10b981' },
-  { name: 'Agents', value: 150, color: '#8b5cf6' },
-];
-
-const propertyTypeData = [
-  { name: 'Residential', value: 340, color: '#6366f1' },
-  { name: 'Commercial', value: 120, color: '#f59e0b' },
-  { name: 'Land/Plot', value: 210, color: '#14b8a6' },
-];
-
-const locationData = [
-  { city: 'Chennai', count: 450 },
-  { city: 'Coimbatore', count: 280 },
-  { city: 'Bengaluru', count: 320 },
-  { city: 'Madurai', count: 150 },
-  { city: 'Hyderabad', count: 190 },
-];
-
+import { adminService, type DashboardStats } from '../../services/adminService';
+import { getAllProperties } from '../../utils/propertyUtils';
 
 export default function AdminDashboard() {
   const [timeFilter, setTimeFilter] = useState('30 Days');
   const [revenueFilter, setRevenueFilter] = useState('Monthly');
+  const [stats, setStats] = useState<DashboardStats | null>(null);
+
+  useEffect(() => {
+    adminService.getDashboardStats().then(data => {
+      setStats(data);
+    });
+  }, []);
+
+  const allProps = getAllProperties();
+
+  // Dynamic distribution from actual properties & users
+  const userPieData = [
+    { name: 'Buyers', value: stats?.users.buyers || 0, color: '#3b82f6' },
+    { name: 'Sellers', value: stats?.users.sellers || 0, color: '#10b981' },
+    { name: 'Agents', value: stats?.users.agents || 0, color: '#8b5cf6' },
+  ];
+
+  const typeCounts = allProps.reduce<Record<string, number>>((acc, p) => {
+    const t = p.propertyType || 'Other';
+    acc[t] = (acc[t] || 0) + 1;
+    return acc;
+  }, {});
+
+  const propertyTypeData = Object.keys(typeCounts).length > 0 ? Object.entries(typeCounts).map(([name, value], i) => ({
+    name,
+    value,
+    color: ['#6366f1', '#f59e0b', '#14b8a6', '#ec4899', '#8b5cf6'][i % 5]
+  })) : [
+    { name: 'Residential', value: 0, color: '#6366f1' },
+    { name: 'Commercial', value: 0, color: '#f59e0b' },
+    { name: 'Land/Plot', value: 0, color: '#14b8a6' }
+  ];
+
+  const locCounts = allProps.reduce<Record<string, number>>((acc, p) => {
+    if (p.district) acc[p.district] = (acc[p.district] || 0) + 1;
+    return acc;
+  }, {});
+
+  const locationData = Object.keys(locCounts).length > 0 ? Object.entries(locCounts).map(([city, count]) => ({
+    city,
+    count
+  })) : [
+    { city: 'Chennai', count: 0 },
+    { city: 'Coimbatore', count: 0 },
+    { city: 'Madurai', count: 0 }
+  ];
+
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul'];
+  const revenueData = months.map(name => ({
+    name,
+    subscription: 0,
+    listing: 0,
+    agents: 0
+  }));
+
+  const platformGrowthData = [
+    { name: 'W1', users: stats?.users.total || 0, properties: allProps.length, views: allProps.reduce((sum, p) => sum + (p.views || 0), 0), enquiries: allProps.reduce((sum, p) => sum + (p.enquiries || 0), 0) },
+    { name: 'W2', users: stats?.users.total || 0, properties: allProps.length, views: 0, enquiries: 0 },
+    { name: 'W3', users: stats?.users.total || 0, properties: allProps.length, views: 0, enquiries: 0 },
+    { name: 'W4', users: stats?.users.total || 0, properties: allProps.length, views: 0, enquiries: 0 },
+  ];
 
   const formatCurrency = (val: number) => {
     return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(val);
@@ -102,13 +126,13 @@ export default function AdminDashboard() {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
             <div>
               <div style={{ color: '#64748b', fontSize: '0.85rem', fontWeight: '500', marginBottom: '4px' }}>Total Users</div>
-              <div style={{ fontSize: '1.75rem', fontWeight: '700', color: '#0f172a' }}>1,250</div>
+              <div style={{ fontSize: '1.75rem', fontWeight: '700', color: '#0f172a' }}>{stats?.users.total.toLocaleString('en-IN') ?? '0'}</div>
             </div>
             <div style={{ padding: '10px', backgroundColor: '#eff6ff', borderRadius: '8px', color: '#3b82f6' }}><Users size={20} /></div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.85rem' }}>
-            <span style={{ color: '#10b981', display: 'flex', alignItems: 'center', fontWeight: '500' }}><TrendingUp size={14} style={{marginRight: '2px'}}/> +12.5%</span>
-            <span style={{ color: '#94a3b8' }}>vs last month</span>
+            <span style={{ color: '#10b981', display: 'flex', alignItems: 'center', fontWeight: '500' }}><TrendingUp size={14} style={{marginRight: '2px'}}/> Live</span>
+            <span style={{ color: '#94a3b8' }}>database users</span>
           </div>
         </Card>
 
@@ -116,13 +140,13 @@ export default function AdminDashboard() {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
             <div>
               <div style={{ color: '#64748b', fontSize: '0.85rem', fontWeight: '500', marginBottom: '4px' }}>Active Users</div>
-              <div style={{ fontSize: '1.75rem', fontWeight: '700', color: '#0f172a' }}>1,100</div>
+              <div style={{ fontSize: '1.75rem', fontWeight: '700', color: '#0f172a' }}>{stats?.users.active.toLocaleString('en-IN') ?? '0'}</div>
             </div>
             <div style={{ padding: '10px', backgroundColor: '#ecfdf5', borderRadius: '8px', color: '#10b981' }}><Users size={20} /></div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.85rem' }}>
-            <span style={{ color: '#10b981', display: 'flex', alignItems: 'center', fontWeight: '500' }}><TrendingUp size={14} style={{marginRight: '2px'}}/> +8.2%</span>
-            <span style={{ color: '#94a3b8' }}>vs last month</span>
+            <span style={{ color: '#10b981', display: 'flex', alignItems: 'center', fontWeight: '500' }}><TrendingUp size={14} style={{marginRight: '2px'}}/> Active</span>
+            <span style={{ color: '#94a3b8' }}>current session</span>
           </div>
         </Card>
 
@@ -130,13 +154,13 @@ export default function AdminDashboard() {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
             <div>
               <div style={{ color: '#64748b', fontSize: '0.85rem', fontWeight: '500', marginBottom: '4px' }}>Total Properties</div>
-              <div style={{ fontSize: '1.75rem', fontWeight: '700', color: '#0f172a' }}>685</div>
+              <div style={{ fontSize: '1.75rem', fontWeight: '700', color: '#0f172a' }}>{stats?.properties.total.toLocaleString('en-IN') ?? '0'}</div>
             </div>
             <div style={{ padding: '10px', backgroundColor: '#f3e8ff', borderRadius: '8px', color: '#8b5cf6' }}><Home size={20} /></div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.85rem' }}>
-            <span style={{ color: '#10b981', display: 'flex', alignItems: 'center', fontWeight: '500' }}><TrendingUp size={14} style={{marginRight: '2px'}}/> +15.4%</span>
-            <span style={{ color: '#94a3b8' }}>vs last month</span>
+            <span style={{ color: '#10b981', display: 'flex', alignItems: 'center', fontWeight: '500' }}><TrendingUp size={14} style={{marginRight: '2px'}}/> Live</span>
+            <span style={{ color: '#94a3b8' }}>published & draft</span>
           </div>
         </Card>
 
@@ -144,13 +168,12 @@ export default function AdminDashboard() {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
             <div>
               <div style={{ color: '#64748b', fontSize: '0.85rem', fontWeight: '500', marginBottom: '4px' }}>Total Revenue</div>
-              <div style={{ fontSize: '1.75rem', fontWeight: '700', color: '#0f172a' }}>{formatCurrency(450000)}</div>
+              <div style={{ fontSize: '1.75rem', fontWeight: '700', color: '#0f172a' }}>{formatCurrency(stats?.financial.revenue || 0)}</div>
             </div>
             <div style={{ padding: '10px', backgroundColor: '#fef3c7', borderRadius: '8px', color: '#d97706' }}><IndianRupee size={20} /></div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.85rem' }}>
-            <span style={{ color: '#10b981', display: 'flex', alignItems: 'center', fontWeight: '500' }}><TrendingUp size={14} style={{marginRight: '2px'}}/> +18.7%</span>
-            <span style={{ color: '#94a3b8' }}>vs last month</span>
+            <span style={{ color: '#94a3b8' }}>from paid listings & subscriptions</span>
           </div>
         </Card>
 
@@ -158,7 +181,7 @@ export default function AdminDashboard() {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
             <div>
               <div style={{ color: '#be123c', fontSize: '0.85rem', fontWeight: '600', marginBottom: '4px' }}>Pending Approvals</div>
-              <div style={{ fontSize: '1.75rem', fontWeight: '700', color: '#9f1239' }}>12</div>
+              <div style={{ fontSize: '1.75rem', fontWeight: '700', color: '#9f1239' }}>{stats?.properties.pending.toLocaleString('en-IN') ?? '0'}</div>
             </div>
             <div style={{ padding: '10px', backgroundColor: '#ffe4e6', borderRadius: '8px', color: '#e11d48' }}><FileText size={20} /></div>
           </div>
@@ -171,13 +194,12 @@ export default function AdminDashboard() {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
             <div>
               <div style={{ color: '#c2410c', fontSize: '0.85rem', fontWeight: '600', marginBottom: '4px' }}>Open Complaints</div>
-              <div style={{ fontSize: '1.75rem', fontWeight: '700', color: '#9a3412' }}>2</div>
+              <div style={{ fontSize: '1.75rem', fontWeight: '700', color: '#9a3412' }}>{stats?.issues.openComplaints.toLocaleString('en-IN') ?? '0'}</div>
             </div>
             <div style={{ padding: '10px', backgroundColor: '#ffedd5', borderRadius: '8px', color: '#ea580c' }}><ShieldAlert size={20} /></div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.85rem' }}>
-            <span style={{ color: '#10b981', display: 'flex', alignItems: 'center', fontWeight: '500' }}><TrendingDown size={14} style={{marginRight: '2px'}}/> -4.2%</span>
-            <span style={{ color: '#c2410c' }}>vs last month</span>
+            <span style={{ color: '#c2410c' }}>active reports</span>
           </div>
         </Card>
       </div>

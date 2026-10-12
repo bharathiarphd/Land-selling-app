@@ -1,7 +1,8 @@
-import { mockProperties, type Property } from '../data/mockProperties';
+import { type Property } from '../data/mockProperties';
 
 const CUSTOM_PROPERTIES_KEY = 'landSellingApp_customProperties';
 const RECENTLY_VIEWED_KEY = 'land_selling_app_recently_viewed';
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
 
 export const getCustomProperties = (): Property[] => {
   const data = localStorage.getItem(CUSTOM_PROPERTIES_KEY);
@@ -15,30 +16,51 @@ export const getCustomProperties = (): Property[] => {
   return [];
 };
 
-export const getPropertyById = (id: string): Property | undefined => {
-  let property = mockProperties.find(p => p.id === id);
-  if (!property) {
-    property = getCustomProperties().find(p => p.id === id);
+export const syncPropertiesFromBackend = async (): Promise<Property[]> => {
+  try {
+    const res = await fetch(`${BACKEND_URL}/api/properties`);
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        const formatted = data.map((item: any) => ({
+          ...item,
+          id: item._id || item.id
+        }));
+        localStorage.setItem(CUSTOM_PROPERTIES_KEY, JSON.stringify(formatted));
+        return formatted;
+      }
+    }
+  } catch (err) {
+    // Backend unreachable, fallback to localStorage cache
   }
-  return property;
+  return getCustomProperties();
+};
+
+export const getPropertyById = (id: string): Property | undefined => {
+  return getCustomProperties().find(p => p.id === id);
 };
 
 export const getAllProperties = (): Property[] => {
-  const custom = getCustomProperties();
-  return [...custom, ...mockProperties];
+  return getCustomProperties();
 };
 
 export const createProperty = (propertyData: Partial<Property>): Property => {
   const newProperty: Property = {
     ...propertyData,
-    id: `prop_${Date.now()}`,
+    id: propertyData.id || `prop_${Date.now()}`,
     status: propertyData.status || 'Available'
   } as Property;
 
   const customProps = getCustomProperties();
   customProps.unshift(newProperty);
-  
   localStorage.setItem(CUSTOM_PROPERTIES_KEY, JSON.stringify(customProps));
+
+  // Sync with live backend API
+  fetch(`${BACKEND_URL}/api/properties`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(newProperty)
+  }).catch(e => console.warn('Backend sync failed:', e));
 
   return newProperty;
 };
@@ -50,6 +72,14 @@ export const updateProperty = (id: string, propertyData: Partial<Property>): Pro
   
   customProps[index] = { ...customProps[index], ...propertyData };
   localStorage.setItem(CUSTOM_PROPERTIES_KEY, JSON.stringify(customProps));
+
+  // Sync with live backend API
+  fetch(`${BACKEND_URL}/api/properties/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(customProps[index])
+  }).catch(e => console.warn('Backend sync failed:', e));
+
   return customProps[index];
 };
 
@@ -60,6 +90,12 @@ export const deleteProperty = (id: string): boolean => {
   
   customProps.splice(index, 1);
   localStorage.setItem(CUSTOM_PROPERTIES_KEY, JSON.stringify(customProps));
+
+  // Sync with live backend API
+  fetch(`${BACKEND_URL}/api/properties/${id}`, {
+    method: 'DELETE'
+  }).catch(e => console.warn('Backend sync failed:', e));
+
   return true;
 };
 
@@ -70,6 +106,14 @@ export const updatePropertyStatus = (id: string, status: Property['status'] | 'D
   
   customProps[index].status = status as any;
   localStorage.setItem(CUSTOM_PROPERTIES_KEY, JSON.stringify(customProps));
+
+  // Sync with live backend API
+  fetch(`${BACKEND_URL}/api/properties/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ status })
+  }).catch(e => console.warn('Backend sync failed:', e));
+
   return true;
 };
 

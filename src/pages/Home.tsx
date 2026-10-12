@@ -1,11 +1,12 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ShieldCheck, Search as SearchIcon, MapPin, Handshake, CheckCircle2, Home as HomeIcon } from 'lucide-react';
 import { SearchBar } from '../components/SearchBar';
 import { LocationSelector } from '../components/LocationSelector';
 import { PropertyCard } from '../components/PropertyCard';
 import { Button } from '../components/Button';
-import { getAllProperties } from '../utils/propertyUtils';
+import { getAllProperties, syncPropertiesFromBackend } from '../utils/propertyUtils';
+import type { Property } from '../data/mockProperties';
 import { useLanguage } from '../context/LanguageContext';
 import styles from './Home.module.css';
 
@@ -14,6 +15,13 @@ export default function Home() {
   const { t } = useLanguage();
   const [search, setSearch] = useState('');
   const [favorites, setFavorites] = useState<string[]>([]);
+  const [properties, setProperties] = useState<Property[]>(getAllProperties());
+
+  useEffect(() => {
+    syncPropertiesFromBackend().then(props => {
+      setProperties(props);
+    });
+  }, []);
 
   const handleFavoriteToggle = (id: string) => {
     setFavorites(prev => 
@@ -34,16 +42,27 @@ export default function Home() {
     { name: t('categories.other'), icon: '🏞️' }
   ];
 
-  // Hardcoded English mock locations. In real app, they will be mapped or fetched dynamically.
-  // We can use localized labels if needed.
-  const popularLocations = [
-    { name: 'Chennai', count: 1240, label: t('language') === 'ta' ? 'சென்னை' : 'Chennai' },
-    { name: 'Tindivanam', count: 128, label: t('language') === 'ta' ? 'திண்டிவனம்' : 'Tindivanam' },
-    { name: 'Villupuram', count: 345, label: t('language') === 'ta' ? 'விழுப்புரம்' : 'Villupuram' },
-    { name: 'Gingee', count: 86, label: t('language') === 'ta' ? 'செஞ்சி' : 'Gingee' },
-    { name: 'Kanchipuram', count: 210, label: t('language') === 'ta' ? 'காஞ்சிபுரம்' : 'Kanchipuram' },
-    { name: 'Madurai', count: 430, label: t('language') === 'ta' ? 'மதுரை' : 'Madurai' }
+  // Dynamic location counts based on live properties
+  const districtCounts = properties.reduce<Record<string, number>>((acc, p) => {
+    if (p.district) {
+      acc[p.district] = (acc[p.district] || 0) + 1;
+    }
+    return acc;
+  }, {});
+
+  const locations = [
+    { name: 'Chennai', label: t('language') === 'ta' ? 'சென்னை' : 'Chennai' },
+    { name: 'Tindivanam', label: t('language') === 'ta' ? 'திண்டிவனம்' : 'Tindivanam' },
+    { name: 'Villupuram', label: t('language') === 'ta' ? 'விழுப்புரம்' : 'Villupuram' },
+    { name: 'Gingee', label: t('language') === 'ta' ? 'செஞ்சி' : 'Gingee' },
+    { name: 'Kanchipuram', label: t('language') === 'ta' ? 'காஞ்சிபுரம்' : 'Kanchipuram' },
+    { name: 'Madurai', label: t('language') === 'ta' ? 'மதுரை' : 'Madurai' }
   ];
+
+  const popularLocations = locations.map(loc => ({
+    ...loc,
+    count: districtCounts[loc.name] || 0
+  }));
 
   return (
     <div className="container">
@@ -93,33 +112,46 @@ export default function Home() {
           <h2 className={styles.sectionTitle}>{t('home.featuredProperties')}</h2>
         </div>
         <div className={styles.propertyGrid}>
-          {getAllProperties().map(property => (
-            <PropertyCard 
-              key={property.id} 
-              property={property} 
-              isFavorite={favorites.includes(property.id)}
-              onFavoriteClick={handleFavoriteToggle}
-            />
-          ))}
+          {properties.length === 0 ? (
+            <div style={{ gridColumn: '1 / -1', textAlign: 'center', padding: 'var(--spacing-8)', backgroundColor: 'var(--color-surface)', borderRadius: 'var(--radius-lg)' }}>
+              <p style={{ color: 'var(--color-text-secondary)', marginBottom: 'var(--spacing-4)', fontSize: 'var(--font-size-base)' }}>
+                {t('home.noProperties') || 'No properties listed yet.'}
+              </p>
+              <Button onClick={() => navigate('/add-property')}>
+                {t('common.addProperty') || 'List Your Land'}
+              </Button>
+            </div>
+          ) : (
+            properties.map(property => (
+              <PropertyCard 
+                key={property.id} 
+                property={property} 
+                isFavorite={favorites.includes(property.id)}
+                onFavoriteClick={handleFavoriteToggle}
+              />
+            ))
+          )}
         </div>
       </section>
 
       {/* 4. Recently Added */}
-      <section className={styles.section}>
-        <div className={styles.sectionHeader}>
-          <h2 className={styles.sectionTitle}>{t('home.recentlyAdded')}</h2>
-        </div>
-        <div className={styles.propertyGrid}>
-          {getAllProperties().slice(0, 4).map(property => (
-            <PropertyCard 
-              key={property.id} 
-              property={property}
-              isFavorite={favorites.includes(property.id)}
-              onFavoriteClick={handleFavoriteToggle} 
-            />
-          ))}
-        </div>
-      </section>
+      {properties.length > 0 && (
+        <section className={styles.section}>
+          <div className={styles.sectionHeader}>
+            <h2 className={styles.sectionTitle}>{t('home.recentlyAdded')}</h2>
+          </div>
+          <div className={styles.propertyGrid}>
+            {properties.slice(0, 4).map(property => (
+              <PropertyCard 
+                key={property.id} 
+                property={property}
+                isFavorite={favorites.includes(property.id)}
+                onFavoriteClick={handleFavoriteToggle} 
+              />
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* 5. Popular Locations */}
       <section className={styles.section}>

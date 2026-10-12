@@ -50,15 +50,36 @@ const User = mongoose.model('User', userSchema);
 const propertySchema = new mongoose.Schema({
   title: { type: String, required: true },
   description: { type: String },
+  propertyType: { type: String },
   price: { type: Number, required: true },
-  location: { type: String, required: true },
-  type: { type: String, enum: ['Residential', 'Commercial', 'Land/Plot', 'Apartment', 'Villa'], required: true },
-  status: { type: String, enum: ['Published', 'Pending', 'Rejected', 'Sold', 'Rented', 'Draft'], default: 'Pending' },
-  sellerId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  area: { type: Number },
+  areaUnit: { type: String },
+  location: { type: String },
+  district: { type: String },
+  taluk: { type: String },
+  village: { type: String },
+  images: [{ type: String }],
+  facing: { type: String },
+  roadWidth: { type: Number },
+  electricity: { type: Boolean },
+  water: { type: Boolean },
+  approval: { type: String },
+  seller: {
+    id: { type: String },
+    name: { type: String },
+    phone: { type: String },
+    type: { type: String }
+  },
+  status: { type: String, default: 'Available' },
+  verificationStatus: { type: String, default: 'Unverified' },
+  documents: { type: mongoose.Schema.Types.Mixed },
+  pincode: { type: String },
+  surveyNumber: { type: String },
+  subdivisionNumber: { type: String },
   views: { type: Number, default: 0 },
   enquiries: { type: Number, default: 0 },
   createdAt: { type: Date, default: Date.now }
-});
+}, { strict: false });
 const Property = mongoose.model('Property', propertySchema);
 
 const complaintSchema = new mongoose.Schema({
@@ -166,6 +187,78 @@ app.delete('/api/admin/users/:id', verifyToken, requireAdmin, async (req, res) =
   }
 });
 
+// --- Properties CRUD Routes ---
+
+// Get all properties (supports optional filtering)
+app.get('/api/properties', async (req, res) => {
+  try {
+    const { district, propertyType, status } = req.query;
+    const filter = {};
+    if (district) filter.district = district;
+    if (propertyType) filter.propertyType = propertyType;
+    if (status) filter.status = status;
+    
+    const properties = await Property.find(filter).sort({ createdAt: -1 });
+    res.json(properties);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get property by ID
+app.get('/api/properties/:id', async (req, res) => {
+  try {
+    const property = await Property.findById(req.params.id);
+    if (!property) return res.status(404).json({ error: 'Property not found' });
+    res.json(property);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Create new property
+app.post('/api/properties', async (req, res) => {
+  try {
+    const newProperty = new Property(req.body);
+    await newProperty.save();
+    res.status(201).json(newProperty);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Update property
+app.put('/api/properties/:id', async (req, res) => {
+  try {
+    const updated = await Property.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    if (!updated) return res.status(404).json({ error: 'Property not found' });
+    res.json(updated);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Delete property
+app.delete('/api/properties/:id', async (req, res) => {
+  try {
+    const deleted = await Property.findByIdAndDelete(req.params.id);
+    if (!deleted) return res.status(404).json({ error: 'Property not found' });
+    res.json({ message: 'Property deleted successfully' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get properties for a user
+app.get('/api/properties/user/:userId', async (req, res) => {
+  try {
+    const properties = await Property.find({ 'seller.id': req.params.userId }).sort({ createdAt: -1 });
+    res.json(properties);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Admin Route: Get Dashboard Stats
 app.get('/api/admin/dashboard-stats', verifyToken, requireAdmin, async (req, res) => {
   try {
@@ -180,29 +273,26 @@ app.get('/api/admin/dashboard-stats', verifyToken, requireAdmin, async (req, res
 
     const openComplaints = await Complaint.countDocuments({ status: 'Open' });
 
-    // This would ideally be calculated from an actual Transactions/Subscriptions collection
-    const revenue = 450000; 
-
     res.json({
       users: {
-        total: totalUsers || 1250,
-        active: 1100, // Mock active users
-        buyers: buyers || 650,
-        sellers: sellers || 450,
-        agents: agents || 150
+        total: totalUsers,
+        active: totalUsers,
+        buyers: buyers,
+        sellers: sellers,
+        agents: agents
       },
       properties: {
-        total: totalProperties || 685,
-        published: publishedProps || 420,
-        pending: pendingProps || 12
+        total: totalProperties,
+        published: publishedProps,
+        pending: pendingProps
       },
       financial: {
-        revenue: revenue,
-        activeSubscriptions: 45
+        revenue: 0,
+        activeSubscriptions: 0
       },
       issues: {
-        pendingDocuments: 24, // Mock pending docs
-        openComplaints: openComplaints || 2
+        pendingDocuments: 0,
+        openComplaints: openComplaints
       }
     });
   } catch (error) {

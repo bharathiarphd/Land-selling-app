@@ -7,7 +7,8 @@ import { Button } from '../components/Button';
 import { Modal } from '../components/Modal';
 import { Select } from '../components/Select';
 import { GoogleMap, type MarkerData } from '../components/GoogleMap';
-import { getAllProperties } from '../utils/propertyUtils';
+import { getAllProperties, syncPropertiesFromBackend } from '../utils/propertyUtils';
+import type { Property } from '../data/mockProperties';
 import { filterProperties, sortProperties, type SortOption, type FilterOptions } from '../utils/searchUtils';
 import { FilterSections } from '../components/search/FilterSections';
 import { QuickFilters } from '../components/search/QuickFilters';
@@ -42,11 +43,18 @@ export default function Search() {
   }, [searchParams]);
 
   const currentSort = (searchParams.get('sort') as SortOption) || 'relevance';
+  const [allProps, setAllProps] = useState<Property[]>(getAllProperties());
+
+  useEffect(() => {
+    syncPropertiesFromBackend().then(props => {
+      setAllProps(props);
+    });
+  }, []);
 
   const results = useMemo(() => {
-    const filtered = filterProperties(getAllProperties(), appliedFilters);
+    const filtered = filterProperties(allProps, appliedFilters);
     return sortProperties(filtered, currentSort);
-  }, [appliedFilters, currentSort]);
+  }, [allProps, appliedFilters, currentSort]);
 
   useEffect(() => {
     if (isFilterOpen) {

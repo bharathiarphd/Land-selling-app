@@ -66,41 +66,75 @@ export interface Complaint {
   notes?: string;
 }
 
-// Mock Data
-let mockComplaints: Complaint[] = [
-  { id: 'c1', propertyId: 'prop-2', propertyTitle: 'Agricultural Land in Kanchipuram', reportedBy: 'user-22', reason: 'Fake property', status: 'New', dateReported: new Date().toISOString() },
-  { id: 'c2', propertyId: 'prop-3', propertyTitle: 'Commercial Plot in OMR', reportedBy: 'user-45', reason: 'Wrong price', status: 'Under Investigation', dateReported: new Date(Date.now() - 86400000).toISOString() }
-];
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
+const AUTH_STORAGE_KEY = 'land_selling_app_token';
+
+// Complaints stored locally or synced with backend
+let liveComplaints: Complaint[] = [];
 
 export const adminService = {
   getDashboardStats: async (): Promise<DashboardStats> => {
-    // Simulate network delay
-    await new Promise(resolve => setTimeout(resolve, 500));
-    
+    const token = localStorage.getItem(AUTH_STORAGE_KEY);
+    if (token) {
+      try {
+        const res = await fetch(`${BACKEND_URL}/api/admin/dashboard-stats`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          return {
+            users: {
+              total: data.users?.total || 0,
+              active: data.users?.active || 0,
+              buyers: data.users?.buyers || 0,
+              sellers: data.users?.sellers || 0,
+              agents: data.users?.agents || 0
+            },
+            properties: {
+              total: data.properties?.total || 0,
+              published: data.properties?.published || 0,
+              pending: data.properties?.pending || 0,
+              sold: 0,
+              featured: 0
+            },
+            financial: {
+              revenue: data.financial?.revenue || 0,
+              activeSubscriptions: data.financial?.activeSubscriptions || 0
+            },
+            issues: {
+              pendingDocuments: data.issues?.pendingDocuments || 0,
+              openComplaints: data.issues?.openComplaints || liveComplaints.length
+            }
+          };
+        }
+      } catch (err) {
+        // Fallback to local calculations below
+      }
+    }
+
     const props = getAllProperties();
-    
     return {
       users: {
-        total: 1250,
-        active: 1100,
-        buyers: 800,
-        sellers: 300,
-        agents: 150
+        total: 1,
+        active: 1,
+        buyers: 1,
+        sellers: 0,
+        agents: 0
       },
       properties: {
         total: props.length,
-        published: props.filter(p => p.status === 'Available').length,
-        pending: 12,
+        published: props.filter(p => p.status === 'Available' || p.status === 'Published').length,
+        pending: props.filter(p => p.status === 'Pending').length,
         sold: props.filter(p => p.status === 'Sold').length,
-        featured: 5
+        featured: 0
       },
       financial: {
-        revenue: 450000,
-        activeSubscriptions: 45
+        revenue: 0,
+        activeSubscriptions: 0
       },
       issues: {
-        pendingDocuments: 24,
-        openComplaints: mockComplaints.filter(c => c.status === 'New' || c.status === 'Under Investigation').length
+        pendingDocuments: 0,
+        openComplaints: liveComplaints.filter(c => c.status === 'New' || c.status === 'Under Investigation').length
       }
     };
   },
@@ -147,12 +181,10 @@ export const adminService = {
   },
 
   getComplaints: async (): Promise<Complaint[]> => {
-    await new Promise(resolve => setTimeout(resolve, 400));
-    return [...mockComplaints];
+    return [...liveComplaints];
   },
 
   updateComplaintStatus: async (id: string, status: Complaint['status'], notes?: string): Promise<void> => {
-    await new Promise(resolve => setTimeout(resolve, 300));
-    mockComplaints = mockComplaints.map(c => c.id === id ? { ...c, status, notes: notes || c.notes } : c);
+    liveComplaints = liveComplaints.map(c => c.id === id ? { ...c, status, notes: notes || c.notes } : c);
   }
 };
