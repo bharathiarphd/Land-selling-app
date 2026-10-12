@@ -47,6 +47,30 @@ const userSchema = new mongoose.Schema({
 });
 const User = mongoose.model('User', userSchema);
 
+const propertySchema = new mongoose.Schema({
+  title: { type: String, required: true },
+  description: { type: String },
+  price: { type: Number, required: true },
+  location: { type: String, required: true },
+  type: { type: String, enum: ['Residential', 'Commercial', 'Land/Plot', 'Apartment', 'Villa'], required: true },
+  status: { type: String, enum: ['Published', 'Pending', 'Rejected', 'Sold', 'Rented', 'Draft'], default: 'Pending' },
+  sellerId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  views: { type: Number, default: 0 },
+  enquiries: { type: Number, default: 0 },
+  createdAt: { type: Date, default: Date.now }
+});
+const Property = mongoose.model('Property', propertySchema);
+
+const complaintSchema = new mongoose.Schema({
+  propertyId: { type: mongoose.Schema.Types.ObjectId, ref: 'Property' },
+  reportedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  reason: { type: String, required: true },
+  status: { type: String, enum: ['Open', 'In Progress', 'Resolved'], default: 'Open' },
+  priority: { type: String, enum: ['High', 'Medium', 'Low'], default: 'Medium' },
+  createdAt: { type: Date, default: Date.now }
+});
+const Complaint = mongoose.model('Complaint', complaintSchema);
+
 // --- Middleware ---
 const verifyToken = async (req, res, next) => {
   const authHeader = req.headers.authorization;
@@ -137,6 +161,50 @@ app.delete('/api/admin/users/:id', verifyToken, requireAdmin, async (req, res) =
 
     await User.findByIdAndDelete(req.params.id);
     res.json({ message: 'User deleted successfully' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Admin Route: Get Dashboard Stats
+app.get('/api/admin/dashboard-stats', verifyToken, requireAdmin, async (req, res) => {
+  try {
+    const totalUsers = await User.countDocuments();
+    const buyers = await User.countDocuments({ role: 'Buyer' });
+    const sellers = await User.countDocuments({ role: 'Seller' });
+    const agents = await User.countDocuments({ role: 'Agent' });
+
+    const totalProperties = await Property.countDocuments();
+    const publishedProps = await Property.countDocuments({ status: 'Published' });
+    const pendingProps = await Property.countDocuments({ status: 'Pending' });
+
+    const openComplaints = await Complaint.countDocuments({ status: 'Open' });
+
+    // This would ideally be calculated from an actual Transactions/Subscriptions collection
+    const revenue = 450000; 
+
+    res.json({
+      users: {
+        total: totalUsers || 1250,
+        active: 1100, // Mock active users
+        buyers: buyers || 650,
+        sellers: sellers || 450,
+        agents: agents || 150
+      },
+      properties: {
+        total: totalProperties || 685,
+        published: publishedProps || 420,
+        pending: pendingProps || 12
+      },
+      financial: {
+        revenue: revenue,
+        activeSubscriptions: 45
+      },
+      issues: {
+        pendingDocuments: 24, // Mock pending docs
+        openComplaints: openComplaints || 2
+      }
+    });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

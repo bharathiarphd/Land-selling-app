@@ -6,6 +6,7 @@ import PropertyDetail from './pages/PropertyDetail';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import VerifyOTP from './pages/VerifyOTP';
+import SetupPin from './pages/SetupPin';
 import AddProperty from './pages/AddProperty';
 import MyProperties from './pages/MyProperties';
 import Favorites from './pages/Favorites';
@@ -68,6 +69,7 @@ function App() {
             <Route path="login" element={<Login />} />
             <Route path="register" element={<Register />} />
             <Route path="verify-otp" element={<VerifyOTP />} />
+            <Route path="setup-pin" element={<SetupPin />} />
             <Route path="help" element={<Help />} />
             <Route path="terms" element={<Terms />} />
             <Route path="privacy" element={<Privacy />} />

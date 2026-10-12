@@ -66,11 +66,18 @@ export default function VerifyOTP() {
     }
   };
 
+  const testOtpHint = sessionStorage.getItem('test_otp_hint') || (sessionStorage.getItem('mock_otp_mode') === 'true' ? '123456' : null);
+
   const handleResend = async () => {
     setTimer(30);
     setError('');
     try {
-      if (phone) await authService.sendOtp(phone);
+      if (phone) {
+        const res = await authService.sendOtp(phone);
+        if (res.isTestMode) {
+          sessionStorage.setItem('test_otp_hint', res.testOtp || '123456');
+        }
+      }
     } catch (e: any) {
       setError(e.message || 'Failed to resend OTP');
     }
@@ -102,17 +109,14 @@ export default function VerifyOTP() {
       // Cleanup
       sessionStorage.removeItem('pending_auth_phone');
       sessionStorage.removeItem('pending_registration');
+      sessionStorage.removeItem('test_otp_hint');
 
-      // Navigate back to intended page or home
+      // Navigate to PIN setup page
       const state = location.state as { from?: { pathname: string } };
-      if (state?.from?.pathname) {
-        navigate(state.from.pathname, { replace: true });
-      } else {
-        navigate('/', { replace: true });
-      }
+      navigate('/setup-pin', { replace: true, state: { from: state?.from } });
 
-    } catch (err) {
-      setError('Invalid OTP. Please try again.');
+    } catch (err: any) {
+      setError(err?.message || 'Invalid OTP. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -131,6 +135,44 @@ export default function VerifyOTP() {
 
       <div className={styles.formCard}>
         <div id="recaptcha-container"></div>
+
+        {testOtpHint && (
+          <div style={{
+            backgroundColor: '#eff6ff',
+            border: '1px solid #bfdbfe',
+            color: '#1e40af',
+            borderRadius: 'var(--radius-md)',
+            padding: '0.75rem 1rem',
+            marginBottom: '1.25rem',
+            fontSize: '0.875rem',
+            textAlign: 'center'
+          }}>
+            <div>🧪 <strong>Developer Test Mode</strong></div>
+            <div style={{ marginTop: '0.25rem' }}>
+              Firebase SMS restricted. Use test OTP: <strong>{testOtpHint}</strong>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setOtp(testOtpHint.split('').slice(0, 6));
+                setError('');
+              }}
+              style={{
+                marginTop: '0.5rem',
+                backgroundColor: '#2563eb',
+                color: '#ffffff',
+                border: 'none',
+                borderRadius: '4px',
+                padding: '0.35rem 0.85rem',
+                fontSize: '0.8rem',
+                cursor: 'pointer',
+                fontWeight: '600'
+              }}
+            >
+              ⚡ Auto-fill {testOtpHint}
+            </button>
+          </div>
+        )}
 
         <form onSubmit={handleSubmit}>
           <div style={{ display: 'flex', gap: 'var(--spacing-2)', justifyContent: 'space-between', marginBottom: 'var(--spacing-6)' }}>

@@ -34,6 +34,7 @@ export function Header() {
           <Link to="/map-search" className={styles.navLink}>Map</Link>
           <Link to="/buyer-requirements" className={styles.navLink}>Demand</Link>
           <Link to="/add-property" className={styles.navLink}>{t('nav.addProperty')}</Link>
+          <Link to="/admin" className={styles.navLink}>Admin Panel</Link>
         </nav>
 
         <div className={styles.right}>

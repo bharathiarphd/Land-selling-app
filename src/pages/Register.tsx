@@ -53,10 +53,15 @@ export default function Register() {
     setIsLoading(true);
 
     try {
-      await authService.sendOtp(formData.phone);
+      const result = await authService.sendOtp(formData.phone);
       
       sessionStorage.setItem('pending_auth_phone', formData.phone);
       sessionStorage.setItem('pending_registration', JSON.stringify(formData as RegisterData));
+      if (result.isTestMode) {
+        sessionStorage.setItem('test_otp_hint', result.testOtp || '123456');
+      } else {
+        sessionStorage.removeItem('test_otp_hint');
+      }
       
       navigate('/verify-otp');
     } catch (err: any) {
