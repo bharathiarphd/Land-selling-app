@@ -112,9 +112,18 @@ export default function VerifyOTP() {
       sessionStorage.removeItem('pending_registration');
       sessionStorage.removeItem('test_otp_hint');
 
-      // Navigate to PIN setup page
+      // If PIN was provided during registration, go directly to intended page
       const state = location.state as { from?: { pathname: string } };
-      navigate('/setup-pin', { replace: true, state: { from: state?.from } });
+      if (pendingReg?.pin) {
+        navigate(state?.from?.pathname || '/', { replace: true });
+      } else {
+        const check = await authService.checkUser(phone);
+        if (check.hasPin) {
+          navigate(state?.from?.pathname || '/', { replace: true });
+        } else {
+          navigate('/setup-pin', { replace: true, state: { from: state?.from } });
+        }
+      }
 
     } catch (err: any) {
       setError(err?.message || 'Invalid OTP. Please try again.');

@@ -12,8 +12,9 @@ export interface User {
 export interface RegisterData {
   name: string;
   phone: string;
-  email?: string;
+  email: string;
   role: UserRole;
+  pin: string;
 }
 
 import { auth } from '../firebase';
@@ -130,6 +131,39 @@ export const authService = {
     return { success: true, isTestMode: true, testOtp: '123456' };
   },
 
+  async checkUser(phone: string): Promise<{ exists: boolean; hasPin: boolean; name?: string; email?: string }> {
+    const digits = phone.replace(/\D/g, '').slice(-10);
+    const cleanPhone = `+91${digits}`;
+
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/auth/check-user`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: cleanPhone })
+      });
+      if (res.ok) {
+        return await res.json();
+      }
+    } catch (_) {
+      // Offline fallback
+    }
+
+    try {
+      const savedUsersRaw = localStorage.getItem('registered_users') || '{}';
+      const registeredUsers = JSON.parse(savedUsersRaw);
+      const user = registeredUsers[cleanPhone] || registeredUsers[digits];
+      const pin = localStorage.getItem(`pin_${cleanPhone}`) || localStorage.getItem(`pin_${digits}`);
+      return {
+        exists: !!user,
+        hasPin: !!pin,
+        name: user?.name,
+        email: user?.email
+      };
+    } catch (_) {
+      return { exists: false, hasPin: false };
+    }
+  },
+
   async verifyOtp(phone: string, otp: string, pendingRegistration?: RegisterData): Promise<{ user: User }> {
     const digits = phone.replace(/\D/g, '').slice(-10);
     const cleanPhone = `+91${digits}`;
@@ -156,13 +190,31 @@ export const authService = {
           isVerified: true
         };
 
+        // If PIN is provided during registration, save it
+        if (pendingRegistration?.pin) {
+          localStorage.setItem(`pin_${cleanPhone}`, pendingRegistration.pin);
+          localStorage.setItem(`pin_${digits}`, pendingRegistration.pin);
+          localStorage.setItem('user_pin', pendingRegistration.pin);
+          try {
+            await fetch(`${BACKEND_URL}/api/auth/set-pin`, {
+              method: 'POST',
+              headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+              },
+              body: JSON.stringify({ phone: cleanPhone, pin: pendingRegistration.pin })
+            });
+          } catch (_) {}
+        }
+
         // Sync with live MongoDB backend
         try {
           const payload = {
             phone: user.phone,
             name: user.name,
             email: user.email,
-            role: user.role
+            role: user.role,
+            pin: pendingRegistration?.pin || undefined
           };
 
           const response = await fetch(`${BACKEND_URL}/api/users/sync`, {
@@ -215,6 +267,12 @@ export const authService = {
         isVerified: true
       };
 
+      if (pendingRegistration?.pin) {
+        localStorage.setItem(`pin_${cleanPhone}`, pendingRegistration.pin);
+        localStorage.setItem(`pin_${digits}`, pendingRegistration.pin);
+        localStorage.setItem('user_pin', pendingRegistration.pin);
+      }
+
       const mockToken = `mock-token-${Date.now()}`;
       localStorage.setItem(AUTH_STORAGE_KEY, mockToken);
       localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(user));
@@ -226,7 +284,7 @@ export const authService = {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${mockToken}`
           },
-          body: JSON.stringify(user)
+          body: JSON.stringify({ ...user, pin: pendingRegistration?.pin })
         });
       } catch (_) {}
 

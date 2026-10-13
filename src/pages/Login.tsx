@@ -17,6 +17,7 @@ export default function Login() {
   const [password, setPassword] = useState('');
   const [pin, setPin] = useState('');
   const [error, setError] = useState('');
+  const [notRegistered, setNotRegistered] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const { t, language } = useLanguage();
   const { login } = useAuth();
@@ -30,6 +31,7 @@ export default function Login() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setNotRegistered(false);
 
     if (loginMode === 'phone') {
       if (!phone) {
@@ -43,6 +45,19 @@ export default function Login() {
 
       setIsLoading(true);
       try {
+        // 1. Check if user is registered first
+        const check = await authService.checkUser(phone);
+        if (!check.exists) {
+          setIsLoading(false);
+          setNotRegistered(true);
+          setError(
+            language === 'ta'
+              ? 'இந்த கைபேசி எண் பதிவு செய்யப்படவில்லை. தயவுசெய்து முதலில் பதிவு செய்யவும்!'
+              : 'You do not have an account yet. Please register first!'
+          );
+          return;
+        }
+
         const result = await authService.sendOtp(phone);
         sessionStorage.setItem('pending_auth_phone', phone);
         if (result.isTestMode) {
@@ -95,7 +110,10 @@ export default function Login() {
         const state = location.state as { from?: { pathname: string } };
         navigate(state?.from?.pathname || '/', { replace: true });
       } catch (err: any) {
-        setError(err.message || 'PIN Login failed. Please check your credentials or login with OTP.');
+        if (err.message && (err.message.includes('No account found') || err.message.includes('register') || err.message.includes('not found'))) {
+          setNotRegistered(true);
+        }
+        setError(err.message || 'PIN Login failed. Please check your credentials or register.');
       } finally {
         setIsLoading(false);
       }
@@ -142,12 +160,39 @@ export default function Login() {
           </button>
           <button 
             type="button"
-            onClick={() => { setLoginMode('email'); setError(''); }}
+            onClick={() => { setLoginMode('email'); setError(''); setNotRegistered(false); }}
             style={{ flex: 1, padding: '0.5rem', border: 'none', background: 'none', borderBottom: loginMode === 'email' ? '2px solid var(--primary-color)' : 'none', color: loginMode === 'email' ? 'var(--primary-color)' : 'var(--text-secondary)', fontWeight: loginMode === 'email' ? '600' : '400', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}
           >
             <Mail size={18} /> Email
           </button>
         </div>
+
+        {notRegistered && (
+          <div style={{
+            backgroundColor: '#eff6ff',
+            border: '1px solid #93c5fd',
+            borderRadius: '8px',
+            padding: '1rem',
+            marginBottom: '1.25rem',
+            textAlign: 'center'
+          }}>
+            <p style={{ margin: '0 0 0.5rem 0', color: '#1e40af', fontWeight: 600, fontSize: '0.95rem' }}>
+              {language === 'ta' ? '⚠️ இந்த எண் இன்னும் பதிவு செய்யப்படவில்லை' : '⚠️ No account found for this mobile number'}
+            </p>
+            <p style={{ margin: '0 0 0.85rem 0', color: '#3b82f6', fontSize: '0.85rem' }}>
+              {language === 'ta' 
+                ? 'முதல் முறை பயனரா? மின்னஞ்சல் மற்றும் 4-இலக்க PIN உடன் பதிவு செய்யவும்.' 
+                : 'First time logging in? Please register first with your email and 4-digit PIN.'}
+            </p>
+            <Button
+              type="button"
+              onClick={() => navigate('/register', { state: { phone } })}
+              style={{ width: '100%', backgroundColor: '#2563eb' }}
+            >
+              {language === 'ta' ? 'இப்போது பதிவு செய்க (Register)' : 'Register First (Free)'}
+            </Button>
+          </div>
+        )}
 
         <form onSubmit={handleSubmit}>
           {loginMode === 'phone' && (

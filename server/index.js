@@ -147,6 +147,37 @@ const requireAdmin = async (req, res, next) => {
 
 // --- Routes ---
 
+// Check if user is registered before login
+app.post('/api/auth/check-user', async (req, res) => {
+  try {
+    const { phone } = req.body;
+    if (!phone) {
+      return res.status(400).json({ error: 'Phone number is required' });
+    }
+
+    const digits = phone.replace(/\D/g, '').slice(-10);
+    const withCountryCode = `+91${digits}`;
+
+    const user = await User.findOne({
+      $or: [
+        { phone: withCountryCode },
+        { phone: digits },
+        { phone: phone }
+      ]
+    });
+
+    res.json({
+      exists: !!user,
+      hasPin: !!(user && user.pin),
+      name: user?.name || null,
+      email: user?.email || null,
+      role: user?.role || 'Buyer'
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Live PIN Login: Verify 4-digit PIN against MongoDB
 app.post('/api/auth/login-pin', async (req, res) => {
   try {
