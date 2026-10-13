@@ -95,11 +95,22 @@ export default function Login() {
         const state = location.state as { from?: { pathname: string } };
         navigate(state?.from?.pathname || '/', { replace: true });
       } catch (err: any) {
-        setError(err.message || 'Login failed. Default PIN is 1234.');
+        setError(err.message || 'PIN Login failed. Please check your credentials or login with OTP.');
       } finally {
         setIsLoading(false);
       }
     }
+  };
+
+  const handleTestSimulator = async () => {
+    if (!phone || !validatePhone(phone)) {
+      setError(language === 'ta' ? 'தயவுசெய்து சரியான 10-இலக்க கைபேசி எண்ணை உள்ளிடவும்' : 'Please enter a valid 10-digit mobile number');
+      return;
+    }
+    const res = await authService.sendSimulatorOtp(phone);
+    sessionStorage.setItem('test_otp_hint', res.testOtp);
+    const state = location.state as { from?: Location };
+    navigate('/verify-otp', { state: { from: state?.from } });
   };
 
   return (
@@ -124,17 +135,17 @@ export default function Login() {
           </button>
           <button 
             type="button"
-            onClick={() => { setLoginMode('email'); setError(''); }}
-            style={{ flex: 1, padding: '0.5rem', border: 'none', background: 'none', borderBottom: loginMode === 'email' ? '2px solid var(--primary-color)' : 'none', color: loginMode === 'email' ? 'var(--primary-color)' : 'var(--text-secondary)', fontWeight: loginMode === 'email' ? '600' : '400', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}
-          >
-            <Mail size={18} /> Email
-          </button>
-          <button 
-            type="button"
             onClick={() => { setLoginMode('pin'); setError(''); }}
             style={{ flex: 1, padding: '0.5rem', border: 'none', background: 'none', borderBottom: loginMode === 'pin' ? '2px solid var(--primary-color)' : 'none', color: loginMode === 'pin' ? 'var(--primary-color)' : 'var(--text-secondary)', fontWeight: loginMode === 'pin' ? '600' : '400', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}
           >
             <KeyRound size={18} /> PIN
+          </button>
+          <button 
+            type="button"
+            onClick={() => { setLoginMode('email'); setError(''); }}
+            style={{ flex: 1, padding: '0.5rem', border: 'none', background: 'none', borderBottom: loginMode === 'email' ? '2px solid var(--primary-color)' : 'none', color: loginMode === 'email' ? 'var(--primary-color)' : 'var(--text-secondary)', fontWeight: loginMode === 'email' ? '600' : '400', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}
+          >
+            <Mail size={18} /> Email
           </button>
         </div>
 
@@ -144,7 +155,7 @@ export default function Login() {
               <label style={{ display: 'block', marginBottom: 'var(--spacing-2)', fontWeight: 'var(--font-weight-medium)' }}>
                 {t('auth.mobileNumber')}
               </label>
-              <div className={styles.phoneInputGroup} style={{ marginBottom: '1rem', display: 'flex', gap: '0.5rem' }}>
+              <div className={styles.phoneInputGroup} style={{ marginBottom: '1.25rem', display: 'flex', gap: '0.5rem' }}>
                 <div className={styles.countryCode} style={{ width: '60px' }}>
                   <Input value="+91" disabled />
                 </div>
@@ -163,41 +174,25 @@ export default function Login() {
                   />
                 </div>
               </div>
-              <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.25rem', alignItems: 'center', flexWrap: 'wrap' }}>
-                <span style={{ fontSize: '0.8rem', color: 'var(--color-text-secondary, #64748b)' }}>Quick Test Numbers:</span>
-                <button
-                  type="button"
-                  onClick={() => { setPhone('8248843385'); setError(''); }}
-                  style={{
-                    backgroundColor: '#eff6ff',
-                    color: '#1d4ed8',
-                    border: '1px solid #bfdbfe',
-                    borderRadius: '999px',
-                    padding: '3px 10px',
-                    fontSize: '0.78rem',
-                    cursor: 'pointer',
-                    fontWeight: 600
-                  }}
-                >
-                  📱 8248843385
-                </button>
-                <button
-                  type="button"
-                  onClick={() => { setPhone('7904494617'); setError(''); }}
-                  style={{
-                    backgroundColor: '#f1f5f9',
-                    color: '#475569',
-                    border: '1px solid #cbd5e1',
-                    borderRadius: '999px',
-                    padding: '3px 10px',
-                    fontSize: '0.78rem',
-                    cursor: 'pointer',
-                    fontWeight: 500
-                  }}
-                >
-                  📱 7904494617
-                </button>
-              </div>
+              {error && error.includes('Firebase') && (
+                <div style={{ marginBottom: '1rem', textAlign: 'center' }}>
+                  <button
+                    type="button"
+                    onClick={handleTestSimulator}
+                    style={{
+                      background: '#f8fafc',
+                      border: '1px dashed #94a3b8',
+                      color: '#475569',
+                      padding: '6px 12px',
+                      borderRadius: '6px',
+                      fontSize: '0.8rem',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    ⚡ Test using simulator code (123456)
+                  </button>
+                </div>
+              )}
             </>
           )}
 

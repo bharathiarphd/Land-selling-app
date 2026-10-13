@@ -66,7 +66,8 @@ export default function VerifyOTP() {
     }
   };
 
-  const testOtpHint = sessionStorage.getItem('test_otp_hint') || (sessionStorage.getItem('mock_otp_mode') === 'true' ? '123456' : null);
+  const isMockMode = sessionStorage.getItem('mock_otp_mode') === 'true';
+  const testOtpHint = isMockMode ? (sessionStorage.getItem('test_otp_hint') || '123456') : null;
 
   const handleResend = async () => {
     setTimer(30);

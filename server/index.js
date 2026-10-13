@@ -3,6 +3,7 @@ import mongoose from 'mongoose';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import admin from 'firebase-admin';
+import jwt from 'jsonwebtoken';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -10,6 +11,8 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 dotenv.config();
+
+const JWT_SECRET = process.env.JWT_SECRET || 'landsellingapp-secret-jwt-key-2024';
 
 const app = express();
 app.use(cors());
@@ -43,6 +46,7 @@ const userSchema = new mongoose.Schema({
   email: { type: String },
   name: { type: String },
   role: { type: String, enum: ['Buyer', 'Seller', 'Agent', 'Admin'], default: 'Buyer' },
+  pin: { type: String },
   createdAt: { type: Date, default: Date.now }
 });
 const User = mongoose.model('User', userSchema);
@@ -100,18 +104,37 @@ const verifyToken = async (req, res, next) => {
   }
 
   const token = authHeader.split('Bearer ')[1];
+
+  // 1. If Firebase Admin initialized, try verifying Firebase token
+  if (admin.apps.length > 0) {
+    try {
+      const decodedToken = await admin.auth().verifyIdToken(token);
+      req.user = decodedToken;
+      return next();
+    } catch (_) {
+      // Fall through to try JWT
+    }
+  }
+
+  // 2. Try JWT token verification (issued for PIN logins)
   try {
-    const decodedToken = await admin.auth().verifyIdToken(token);
-    req.user = decodedToken;
-    next();
-  } catch (error) {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    req.user = decoded;
+    return next();
+  } catch (_) {
+    // If token starts with mock-token for local testing
+    if (token.startsWith('mock-token')) {
+      req.user = { uid: token, isMock: true };
+      return next();
+    }
     return res.status(401).json({ error: 'Unauthorized: Invalid token' });
   }
 };
 
 const requireAdmin = async (req, res, next) => {
   try {
-    const dbUser = await User.findOne({ firebaseUid: req.user.uid });
+    const uid = req.user.uid || req.user.firebaseUid;
+    const dbUser = await User.findOne({ firebaseUid: uid });
     if (dbUser && dbUser.role === 'Admin') {
       next();
     } else {
@@ -124,20 +147,129 @@ const requireAdmin = async (req, res, next) => {
 
 // --- Routes ---
 
+// Live PIN Login: Verify 4-digit PIN against MongoDB
+app.post('/api/auth/login-pin', async (req, res) => {
+  try {
+    const { phone, pin } = req.body;
+    if (!phone || !pin) {
+      return res.status(400).json({ error: 'Phone number and PIN are required' });
+    }
+
+    const digits = phone.replace(/\D/g, '').slice(-10);
+    const withCountryCode = `+91${digits}`;
+
+    const user = await User.findOne({
+      $or: [
+        { phone: withCountryCode },
+        { phone: digits },
+        { phone: phone }
+      ]
+    });
+
+    if (!user) {
+      return res.status(404).json({ error: 'No account found for this mobile number. Please register or login with OTP first.' });
+    }
+
+    if (!user.pin) {
+      return res.status(400).json({ error: 'No PIN has been configured for this account yet. Please log in using OTP first to set a PIN.' });
+    }
+
+    if (user.pin !== String(pin).trim()) {
+      return res.status(401).json({ error: 'Incorrect PIN. Please try again or log in with OTP.' });
+    }
+
+    // Generate JWT token for session
+    const token = jwt.sign(
+      { uid: user.firebaseUid, phone: user.phone, role: user.role, name: user.name },
+      JWT_SECRET,
+      { expiresIn: '30d' }
+    );
+
+    res.json({
+      message: 'Login successful',
+      token,
+      user: {
+        id: user.firebaseUid,
+        name: user.name || `User ${digits.slice(-4)}`,
+        phone: user.phone,
+        email: user.email,
+        role: user.role,
+        isVerified: true
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Set / Update 4-Digit PIN in MongoDB
+app.post('/api/auth/set-pin', async (req, res) => {
+  try {
+    const { phone, pin } = req.body;
+    if (!phone || !pin) {
+      return res.status(400).json({ error: 'Phone number and PIN are required' });
+    }
+    const cleanPin = String(pin).trim();
+    if (!/^\d{4}$/.test(cleanPin)) {
+      return res.status(400).json({ error: 'PIN must be exactly 4 digits' });
+    }
+
+    const digits = phone.replace(/\D/g, '').slice(-10);
+    const withCountryCode = `+91${digits}`;
+
+    let user = await User.findOne({
+      $or: [
+        { phone: withCountryCode },
+        { phone: digits },
+        { phone: phone }
+      ]
+    });
+
+    if (user) {
+      user.pin = cleanPin;
+      await user.save();
+    } else {
+      user = new User({
+        firebaseUid: `uid_${Date.now()}`,
+        phone: withCountryCode,
+        pin: cleanPin,
+        role: 'Buyer',
+        name: `User ${digits.slice(-4)}`
+      });
+      await user.save();
+    }
+
+    res.json({ message: 'PIN saved successfully', success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Sync User from Firebase Phone Auth to MongoDB
 app.post('/api/users/sync', verifyToken, async (req, res) => {
   try {
-    const { phone, name, email, role } = req.body;
-    let user = await User.findOne({ firebaseUid: req.user.uid });
+    const { phone, name, email, role, pin } = req.body;
+    const uid = req.user.uid || req.user.firebaseUid;
+    let user = await User.findOne({ firebaseUid: uid });
+    
+    const formattedPhone = phone || req.user.phone_number || req.user.phone || '';
     
     if (!user) {
       user = new User({
-        firebaseUid: req.user.uid,
-        phone: phone || req.user.phone_number,
+        firebaseUid: uid,
+        phone: formattedPhone,
         email: email || '',
-        name: name || 'Demo User',
-        role: role || 'Buyer'
+        name: name || 'User',
+        role: role || 'Buyer',
+        pin: pin || undefined
       });
+      await user.save();
+    } else {
+      if (name) user.name = name;
+      if (email) user.email = email;
+      if (role) user.role = role;
+      if (pin) user.pin = pin;
+      if (formattedPhone && !user.phone) user.phone = formattedPhone;
       await user.save();
     }
     
@@ -150,7 +282,8 @@ app.post('/api/users/sync', verifyToken, async (req, res) => {
 // Get Current User Session
 app.get('/api/users/me', verifyToken, async (req, res) => {
   try {
-    const user = await User.findOne({ firebaseUid: req.user.uid });
+    const uid = req.user.uid || req.user.firebaseUid;
+    const user = await User.findOne({ firebaseUid: uid });
     if (!user) return res.status(404).json({ error: 'User not found' });
     res.json({ user });
   } catch (error) {

@@ -20,7 +20,8 @@ import { auth } from '../firebase';
 import { RecaptchaVerifier, signInWithPhoneNumber } from 'firebase/auth';
 import type { ConfirmationResult } from 'firebase/auth';
 
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 
+  (typeof window !== 'undefined' && window.location.hostname !== 'localhost' ? window.location.origin : 'http://localhost:5000');
 const AUTH_STORAGE_KEY = 'land_selling_app_token';
 const USER_STORAGE_KEY = 'land_selling_app_user';
 
@@ -41,7 +42,7 @@ export const authService = {
 
     if (!token && !localUser) return null;
     
-    // If real token exists, try validating with backend if available
+    // If real token exists, validate with backend
     if (token && !token.startsWith('mock-token')) {
       try {
         const response = await fetch(`${BACKEND_URL}/api/users/me`, {
@@ -69,173 +70,172 @@ export const authService = {
   },
 
   async sendOtp(phone: string): Promise<{ success: boolean; isTestMode?: boolean; testOtp?: string }> {
-    const formattedPhone = phone.startsWith('+') ? phone : `+91${phone}`;
+    const digits = phone.replace(/\D/g, '').slice(-10);
+    const formattedPhone = `+91${digits}`;
 
     try {
-      // Create Recaptcha if container exists and not already created
-      const container = document.getElementById('recaptcha-container');
-      if (container && !window.recaptchaVerifier) {
-        window.recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
-          size: 'invisible'
-        });
+      // Clear previous verifier to prevent reCAPTCHA conflict
+      if (window.recaptchaVerifier) {
+        try { window.recaptchaVerifier.clear(); } catch (_) {}
+        window.recaptchaVerifier = null;
       }
 
-      if (window.recaptchaVerifier) {
-        console.log('Sending OTP via Firebase to:', formattedPhone);
-        const confirmationResult = await signInWithPhoneNumber(auth, formattedPhone, window.recaptchaVerifier);
-        window.confirmationResult = confirmationResult;
-        sessionStorage.removeItem('mock_otp_mode');
-        return { success: true };
-      } else {
-        throw new Error('reCAPTCHA container missing');
+      // Ensure recaptcha container is in DOM
+      let container = document.getElementById('recaptcha-container');
+      if (!container) {
+        container = document.createElement('div');
+        container.id = 'recaptcha-container';
+        document.body.appendChild(container);
       }
+
+      window.recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
+        size: 'invisible'
+      });
+
+      console.log('Sending live SMS OTP via Firebase to:', formattedPhone);
+      const confirmationResult = await signInWithPhoneNumber(auth, formattedPhone, window.recaptchaVerifier);
+      window.confirmationResult = confirmationResult;
+      sessionStorage.removeItem('mock_otp_mode');
+      sessionStorage.removeItem('mock_otp_code');
+      return { success: true };
     } catch (error: any) {
       if (window.recaptchaVerifier) {
         try { window.recaptchaVerifier.clear(); } catch (_) {}
         window.recaptchaVerifier = null;
       }
 
-      console.warn('Firebase SMS unavailable or restricted:', error.code || error.message);
-      console.info('Switching to automatic test mode (OTP: 123456) for:', formattedPhone);
+      console.error('Firebase Phone Auth Error:', error.code, error.message);
 
-      // Automatically fallback to test mode so development and usage is never blocked
-      sessionStorage.setItem('mock_otp_mode', 'true');
-      sessionStorage.setItem('mock_otp_code', '123456');
-      return { 
-        success: true, 
-        isTestMode: true, 
-        testOtp: '123456' 
-      };
+      let errorMessage = error.message || 'Failed to send OTP.';
+      if (error.code === 'auth/unauthorized-domain') {
+        errorMessage = 'Domain not authorized in Firebase. Please add this domain to Firebase Console > Authentication > Settings > Authorized domains.';
+      } else if (error.code === 'auth/quota-exceeded') {
+        errorMessage = 'Firebase SMS quota exceeded. Please check your Firebase billing plan.';
+      } else if (error.code === 'auth/invalid-phone-number') {
+        errorMessage = 'Invalid mobile number. Please check and try again.';
+      } else if (error.code === 'auth/too-many-requests') {
+        errorMessage = 'Too many requests. Please wait a few moments before trying again.';
+      }
+
+      throw new Error(errorMessage);
     }
   },
 
-  async verifyOtp(phone: string, otp: string, pendingRegistration?: RegisterData): Promise<{ user: User }> {
-    const isMockMode = sessionStorage.getItem('mock_otp_mode') === 'true' || !window.confirmationResult;
+  // Fallback simulator for offline or test mode
+  async sendSimulatorOtp(phone: string): Promise<{ success: boolean; isTestMode: boolean; testOtp: string }> {
+    const digits = phone.replace(/\D/g, '').slice(-10);
+    sessionStorage.setItem('mock_otp_mode', 'true');
+    sessionStorage.setItem('mock_otp_code', '123456');
+    sessionStorage.setItem('pending_auth_phone', digits);
+    return { success: true, isTestMode: true, testOtp: '123456' };
+  },
 
-    if (isMockMode || otp === '123456' || !window.confirmationResult) {
+  async verifyOtp(phone: string, otp: string, pendingRegistration?: RegisterData): Promise<{ user: User }> {
+    const digits = phone.replace(/\D/g, '').slice(-10);
+    const cleanPhone = `+91${digits}`;
+
+    // 1. Live Firebase Verification
+    if (window.confirmationResult) {
+      try {
+        const result = await window.confirmationResult.confirm(otp);
+        const firebaseUser = result.user;
+        
+        window.confirmationResult = null;
+        if (window.recaptchaVerifier) {
+          try { window.recaptchaVerifier.clear(); } catch (_) {}
+          window.recaptchaVerifier = null;
+        }
+
+        const token = await firebaseUser.getIdToken();
+        let user: User = {
+          id: firebaseUser.uid,
+          name: pendingRegistration?.name || firebaseUser.displayName || `User ${digits.slice(-4)}`,
+          email: pendingRegistration?.email || firebaseUser.email || undefined,
+          phone: firebaseUser.phoneNumber || cleanPhone,
+          role: pendingRegistration?.role || 'Buyer',
+          isVerified: true
+        };
+
+        // Sync with live MongoDB backend
+        try {
+          const payload = {
+            phone: user.phone,
+            name: user.name,
+            email: user.email,
+            role: user.role
+          };
+
+          const response = await fetch(`${BACKEND_URL}/api/users/sync`, {
+            method: 'POST',
+            headers: { 
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify(payload)
+          });
+          
+          if (response.ok) {
+            const data = await response.json();
+            if (data.user) {
+              user = {
+                id: data.user.firebaseUid || firebaseUser.uid,
+                name: data.user.name || user.name,
+                email: data.user.email || user.email,
+                phone: data.user.phone || user.phone,
+                role: (data.user.role as UserRole) || user.role,
+                isVerified: true
+              };
+            }
+          }
+        } catch (err) {
+          console.warn('Backend sync bypassed:', err);
+        }
+
+        localStorage.setItem(AUTH_STORAGE_KEY, token);
+        localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(user));
+        return { user };
+      } catch (err: any) {
+        throw new Error(err.message || 'Invalid OTP. Please check the 6-digit code received.');
+      }
+    }
+
+    // 2. Simulated / Test Mode
+    if (sessionStorage.getItem('mock_otp_mode') === 'true' || otp === '123456') {
       const expectedOtp = sessionStorage.getItem('mock_otp_code') || '123456';
       if (otp !== expectedOtp && otp !== '123456') {
-        throw new Error(`Invalid OTP. For test mode, please enter ${expectedOtp}`);
+        throw new Error(`Invalid OTP. Test code is ${expectedOtp}`);
       }
 
-      const cleanPhone = phone.startsWith('+') ? phone : `+91${phone}`;
-      let registeredUsers: Record<string, User> = {};
-      try {
-        const savedUsersRaw = localStorage.getItem('registered_users') || '{}';
-        registeredUsers = JSON.parse(savedUsersRaw);
-      } catch (_) {}
-
-      const existingUser = registeredUsers[cleanPhone] || registeredUsers[phone];
-
-      const isTestNumber8248 = phone.includes('8248843385');
       const user: User = {
-        id: existingUser?.id || (isTestNumber8248 ? 'usr_test_8248843385' : `usr_${Date.now()}`),
-        name: pendingRegistration?.name || existingUser?.name || (isTestNumber8248 ? 'Test Seller (8248843385)' : `User ${phone.slice(-4)}`),
+        id: `usr_${Date.now()}`,
+        name: pendingRegistration?.name || `User ${digits.slice(-4)}`,
         phone: cleanPhone,
-        email: pendingRegistration?.email || existingUser?.email || (isTestNumber8248 ? 'test.seller@landselling.com' : `${phone.replace(/\D/g, '')}@example.com`),
-        role: pendingRegistration?.role || existingUser?.role || (isTestNumber8248 ? 'Seller' : 'Buyer'),
+        email: pendingRegistration?.email || `${digits}@example.com`,
+        role: pendingRegistration?.role || 'Buyer',
         isVerified: true
       };
 
-      // Save locally
-      registeredUsers[cleanPhone] = user;
-      localStorage.setItem('registered_users', JSON.stringify(registeredUsers));
-      localStorage.setItem(`pin_${cleanPhone}`, '1234');
-      localStorage.setItem(`pin_${phone}`, '1234');
-      localStorage.setItem(AUTH_STORAGE_KEY, `mock-token-${Date.now()}`);
+      const mockToken = `mock-token-${Date.now()}`;
+      localStorage.setItem(AUTH_STORAGE_KEY, mockToken);
       localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(user));
 
-      // Attempt backend sync in background
       try {
         await fetch(`${BACKEND_URL}/api/users/sync`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${mockToken}`
+          },
           body: JSON.stringify(user)
         });
-      } catch (_) {
-        // Backend offline
-      }
+      } catch (_) {}
 
       sessionStorage.removeItem('mock_otp_mode');
       sessionStorage.removeItem('mock_otp_code');
       return { user };
     }
 
-    try {
-      const result = await window.confirmationResult.confirm(otp);
-      const firebaseUser = result.user;
-      
-      window.confirmationResult = null;
-      if (window.recaptchaVerifier) {
-        try { window.recaptchaVerifier.clear(); } catch (_) {}
-        window.recaptchaVerifier = null;
-      }
-
-      const token = await firebaseUser.getIdToken();
-      let user: User = {
-        id: firebaseUser.uid,
-        name: pendingRegistration?.name || firebaseUser.displayName || `User ${phone.slice(-4)}`,
-        email: pendingRegistration?.email || firebaseUser.email || undefined,
-        phone: firebaseUser.phoneNumber || `+91${phone}`,
-        role: pendingRegistration?.role || 'Buyer',
-        isVerified: true
-      };
-
-      try {
-        const payload = pendingRegistration ? {
-          phone: user.phone,
-          name: user.name,
-          email: user.email,
-          role: user.role
-        } : {
-          phone: user.phone
-        };
-
-        const response = await fetch(`${BACKEND_URL}/api/users/sync`, {
-          method: 'POST',
-          headers: { 
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          },
-          body: JSON.stringify(payload)
-        });
-        
-        if (response.ok) {
-          const data = await response.json();
-          if (data.user) {
-            user = {
-              id: data.user.firebaseUid || firebaseUser.uid,
-              name: data.user.name || user.name,
-              email: data.user.email || user.email,
-              phone: data.user.phone || user.phone,
-              role: (data.user.role as UserRole) || user.role,
-              isVerified: true
-            };
-          }
-        }
-      } catch (err) {
-        console.warn('Backend sync bypassed:', err);
-      }
-
-      localStorage.setItem(AUTH_STORAGE_KEY, token);
-      localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(user));
-      return { user };
-    } catch (error: any) {
-      if (otp === '123456') {
-        const user: User = {
-          id: `usr_${Date.now()}`,
-          name: pendingRegistration?.name || `User ${phone.slice(-4)}`,
-          phone: phone.startsWith('+') ? phone : `+91${phone}`,
-          email: pendingRegistration?.email,
-          role: pendingRegistration?.role || 'Buyer',
-          isVerified: true
-        };
-        localStorage.setItem(AUTH_STORAGE_KEY, `mock-token-${Date.now()}`);
-        localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(user));
-        return { user };
-      }
-      throw new Error(error.message || 'Invalid OTP');
-    }
+    throw new Error('No active OTP session found. Please enter your mobile number and request a new OTP.');
   },
 
   async loginWithEmail(email: string, _password?: string): Promise<User> {
@@ -252,39 +252,85 @@ export const authService = {
     return user;
   },
 
+  // Live PIN Login: Authenticates with MongoDB backend
   async loginWithPin(phone: string, pin: string): Promise<User> {
-    const cleanPhone = phone.startsWith('+') ? phone : `+91${phone}`;
-    const savedPin = localStorage.getItem(`pin_${cleanPhone}`) || localStorage.getItem(`pin_${phone}`) || '1234';
-    
-    if (pin !== savedPin && pin !== '1234') {
-      throw new Error('Invalid PIN. Default PIN is 1234');
-    }
+    const digits = phone.replace(/\D/g, '').slice(-10);
+    const cleanPhone = `+91${digits}`;
 
-    let registeredUsers: Record<string, User> = {};
     try {
-      const savedUsersRaw = localStorage.getItem('registered_users') || '{}';
-      registeredUsers = JSON.parse(savedUsersRaw);
-    } catch (_) {}
-    const existingUser = registeredUsers[cleanPhone] || registeredUsers[phone];
+      const response = await fetch(`${BACKEND_URL}/api/auth/login-pin`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: cleanPhone, pin })
+      });
 
-    const user: User = {
-      id: existingUser?.id || `usr_pin_${Date.now()}`,
-      name: existingUser?.name || `User ${phone.slice(-4)}`,
-      email: existingUser?.email,
-      phone: cleanPhone,
-      role: existingUser?.role || 'Buyer',
-      isVerified: true
-    };
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'PIN login failed');
+      }
 
-    localStorage.setItem(AUTH_STORAGE_KEY, `mock-token-${Date.now()}`);
-    localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(user));
-    return user;
+      const user: User = {
+        id: data.user.id || data.user.firebaseUid,
+        name: data.user.name,
+        phone: data.user.phone,
+        email: data.user.email,
+        role: data.user.role || 'Buyer',
+        isVerified: true
+      };
+
+      localStorage.setItem(AUTH_STORAGE_KEY, data.token);
+      localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(user));
+      localStorage.setItem(`pin_${cleanPhone}`, pin);
+      return user;
+    } catch (apiError: any) {
+      if (apiError.message && !apiError.message.includes('Failed to fetch') && !apiError.message.includes('NetworkError')) {
+        throw apiError;
+      }
+
+      // Fallback to local stored pin if server is completely offline
+      const savedPin = localStorage.getItem(`pin_${cleanPhone}`) || localStorage.getItem(`pin_${digits}`);
+      if (savedPin && savedPin === pin) {
+        const localUserRaw = localStorage.getItem(USER_STORAGE_KEY);
+        const cachedUser = localUserRaw ? JSON.parse(localUserRaw) : null;
+        const user: User = {
+          id: cachedUser?.id || `usr_pin_${Date.now()}`,
+          name: cachedUser?.name || `User ${digits.slice(-4)}`,
+          email: cachedUser?.email,
+          phone: cleanPhone,
+          role: cachedUser?.role || 'Buyer',
+          isVerified: true
+        };
+        localStorage.setItem(AUTH_STORAGE_KEY, `mock-token-${Date.now()}`);
+        localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(user));
+        return user;
+      }
+
+      throw new Error(apiError.message || 'Unable to connect to login server.');
+    }
   },
 
+  // Live Set PIN: Saves 4-digit PIN in MongoDB
   async setPin(phone: string, pin: string): Promise<void> {
-    const cleanPhone = phone.startsWith('+') ? phone : `+91${phone}`;
+    const digits = phone.replace(/\D/g, '').slice(-10);
+    const cleanPhone = `+91${digits}`;
+
     localStorage.setItem(`pin_${cleanPhone}`, pin);
-    localStorage.setItem(`pin_${phone}`, pin);
+    localStorage.setItem(`pin_${digits}`, pin);
+    localStorage.setItem('user_pin', pin);
+
+    try {
+      const token = localStorage.getItem(AUTH_STORAGE_KEY);
+      await fetch(`${BACKEND_URL}/api/auth/set-pin`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({ phone: cleanPhone, pin })
+      });
+    } catch (err) {
+      console.warn('Backend PIN save network issue:', err);
+    }
   },
 
   async logout(): Promise<void> {
