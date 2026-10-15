@@ -19,8 +19,8 @@ export function AdminLayout() {
   }, [location.pathname]);
 
   const handleLogout = () => {
-    logout();
-    navigate('/login');
+    sessionStorage.removeItem('admin_authenticated');
+    navigate('/');
   };
 
   return (

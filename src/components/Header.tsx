@@ -1,5 +1,16 @@
-import { Link } from 'react-router-dom';
-import { MapPin, Bell, User, LogIn, Globe } from 'lucide-react';
+import { Link, useLocation } from 'react-router-dom';
+import { 
+  Home, 
+  Search, 
+  MapPin, 
+  TrendingUp, 
+  PlusCircle, 
+  Shield, 
+  Heart, 
+  Bell, 
+  User, 
+  Globe 
+} from 'lucide-react';
 import { Logo } from './Logo';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
@@ -8,10 +19,20 @@ import styles from './Header.module.css';
 export function Header() {
   const { isAuthenticated } = useAuth();
   const { language, setLanguage, t } = useLanguage();
+  const location = useLocation();
 
   const toggleLanguage = () => {
     setLanguage(language === 'en' ? 'ta' : 'en');
   };
+
+  const navItems = [
+    { path: '/', label: t('nav.home') || 'Home', icon: Home },
+    { path: '/search', label: t('nav.search') || 'Search', icon: Search },
+    { path: '/map-search', label: 'Map', icon: MapPin },
+    { path: '/buyer-requirements', label: 'Demand', icon: TrendingUp },
+    { path: '/add-property', label: t('nav.addProperty') || 'Add Property', icon: PlusCircle },
+    { path: '/admin', label: 'Admin Panel', icon: Shield },
+  ];
 
   return (
     <header className={styles.header}>
@@ -27,14 +48,41 @@ export function Header() {
           </div>
         </div>
 
-        {/* Desktop Navigation */}
+        {/* Desktop Navigation with Dynamic Active Color & Icon */}
         <nav className={styles.desktopNav}>
-          <Link to="/" className={styles.navLink}>{t('nav.home')}</Link>
-          <Link to="/search" className={styles.navLink}>{t('nav.search')}</Link>
-          <Link to="/map-search" className={styles.navLink}>Map</Link>
-          <Link to="/buyer-requirements" className={styles.navLink}>Demand</Link>
-          <Link to="/add-property" className={styles.navLink}>{t('nav.addProperty')}</Link>
-          <Link to="/admin" className={styles.navLink}>Admin Panel</Link>
+          {navItems.map((item) => {
+            const Icon = item.icon;
+            const isSelected = item.path === '/'
+              ? location.pathname === '/'
+              : location.pathname.startsWith(item.path);
+
+            return (
+              <Link
+                key={item.path}
+                to={item.path}
+                className={styles.navLink}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '6px 12px',
+                  borderRadius: '8px',
+                  color: isSelected ? 'var(--color-primary, #0284c7)' : 'var(--color-text-secondary, #64748b)',
+                  backgroundColor: isSelected ? 'rgba(2, 132, 199, 0.08)' : 'transparent',
+                  fontWeight: isSelected ? 600 : 500,
+                  transition: 'all 0.2s ease',
+                  textDecoration: 'none'
+                }}
+              >
+                <Icon
+                  size={17}
+                  color={isSelected ? 'var(--color-primary, #0284c7)' : '#64748b'}
+                  strokeWidth={isSelected ? 2.3 : 1.8}
+                />
+                <span>{item.label}</span>
+              </Link>
+            );
+          })}
         </nav>
 
         <div className={styles.right}>
@@ -54,24 +102,81 @@ export function Header() {
             </span>
           </button>
 
-          {/* Desktop Links (Icons) */}
-          <Link to="/favorites" className={`${styles.iconBtn} ${styles.desktopNav}`}>
-            Favorites
+          {/* Favorites Link */}
+          <Link
+            to="/favorites"
+            className={`${styles.iconBtn} ${styles.desktopNav}`}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '6px 12px',
+              borderRadius: '8px',
+              color: location.pathname === '/favorites' ? '#e11d48' : '#64748b',
+              backgroundColor: location.pathname === '/favorites' ? 'rgba(225, 29, 72, 0.08)' : 'transparent',
+              fontWeight: location.pathname === '/favorites' ? 600 : 500,
+              textDecoration: 'none'
+            }}
+          >
+            <Heart size={16} color={location.pathname === '/favorites' ? '#e11d48' : '#64748b'} strokeWidth={location.pathname === '/favorites' ? 2.3 : 1.8} />
+            <span>Favorites</span>
           </Link>
           
-          <Link to="/notifications" className={styles.iconBtn}>
-            <Bell size={20} />
+          {/* Notifications */}
+          <Link
+            to="/notifications"
+            className={styles.iconBtn}
+            style={{
+              color: location.pathname === '/notifications' ? 'var(--color-primary, #0284c7)' : 'inherit'
+            }}
+            title="Notifications"
+          >
+            <Bell size={20} color={location.pathname === '/notifications' ? 'var(--color-primary, #0284c7)' : 'currentColor'} />
           </Link>
           
-          {isAuthenticated ? (
-            <Link to="/profile" className={styles.iconBtn} title="Profile">
-              <User size={20} />
-            </Link>
-          ) : (
-            <Link to="/login" className={styles.iconBtn} title="Login">
-              <LogIn size={20} />
-            </Link>
-          )}
+          {/* Profile Symbol: GREEN when logged in, RED when not logged in */}
+          <Link
+            to={isAuthenticated ? '/profile' : '/login'}
+            className={styles.iconBtn}
+            style={{
+              color: isAuthenticated ? '#16a34a' : '#dc2626',
+              backgroundColor: isAuthenticated ? 'rgba(22, 163, 74, 0.1)' : 'rgba(220, 38, 38, 0.1)',
+              border: `1.5px solid ${isAuthenticated ? '#86efac' : '#fca5a5'}`,
+              padding: '6px',
+              borderRadius: '50%',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              position: 'relative',
+              transition: 'all 0.2s ease',
+              textDecoration: 'none'
+            }}
+            title={
+              isAuthenticated 
+                ? (language === 'ta' ? 'சுயவிவரம் (உள்நுழைந்துள்ளது - பச்சை)' : 'Profile (Logged In - Green)') 
+                : (language === 'ta' ? 'உள்நுழைவு (உள்நுழையவில்லை - சிவப்பு)' : 'Login (Not Logged In - Red)')
+            }
+          >
+            <User
+              size={20}
+              color={isAuthenticated ? '#16a34a' : '#dc2626'}
+              strokeWidth={2.2}
+            />
+            {/* Online Status Dot Badge */}
+            <span
+              style={{
+                position: 'absolute',
+                bottom: '-1px',
+                right: '-1px',
+                width: '8px',
+                height: '8px',
+                borderRadius: '50%',
+                backgroundColor: isAuthenticated ? '#16a34a' : '#dc2626',
+                border: '1.5px solid #ffffff',
+                boxShadow: isAuthenticated ? '0 0 6px rgba(22, 163, 74, 0.6)' : '0 0 6px rgba(220, 38, 38, 0.6)'
+              }}
+            />
+          </Link>
         </div>
       </div>
     </header>
