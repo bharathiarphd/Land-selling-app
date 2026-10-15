@@ -1,11 +1,13 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
-import { MapPin, Phone, Mail, KeyRound, ArrowRight, ShieldCheck, AlertCircle, RefreshCw } from 'lucide-react';
+import { MapPin, Phone, Mail, KeyRound, ArrowRight, ShieldCheck, AlertCircle, RefreshCw, Lock } from 'lucide-react';
 import { Input } from '../components/Input';
 import { Button } from '../components/Button';
+import { Checkbox } from '../components/Checkbox';
 import { authService } from '../services/authService';
 import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../context/AuthContext';
+import { getSavedCredentials, saveCredentials, clearSavedCredentials, ADMIN_PHONE_NUMBER, isAdminUser } from '../utils/adminAuth';
 import styles from './Auth.module.css';
 
 type LoginOption = 'pin' | 'email' | 'phone';
@@ -59,6 +61,7 @@ export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [pin, setPin] = useState('');
+  const [rememberMe, setRememberMe] = useState(true);
 
   // UI States
   const [error, setError] = useState('');
@@ -71,9 +74,40 @@ export default function Login() {
   const [otpCode, setOtpCode] = useState('');
 
   const { t, language } = useLanguage();
-  const { login } = useAuth();
+  const { user, login } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+
+  // Load saved ID & password on mount
+  useEffect(() => {
+    const searchParams = new URLSearchParams(window.location.search);
+    const isAdminRequested = searchParams.get('admin') === 'true' || location.state?.from?.pathname?.includes('/admin');
+
+    const saved = getSavedCredentials();
+    if (saved) {
+      setRememberMe(saved.remember !== false);
+      if (saved.option) setSelectedOption(saved.option);
+      if (saved.phone) setPhone(saved.phone);
+      if (saved.pin) setPin(saved.pin);
+      if (saved.email) setEmail(saved.email);
+      if (saved.password) setPassword(saved.password);
+    } else if (isAdminRequested) {
+      setSelectedOption('pin');
+      setPhone(ADMIN_PHONE_NUMBER);
+      const savedAdminPin = localStorage.getItem(`pin_${ADMIN_PHONE_NUMBER}`) || '5983';
+      setPin(savedAdminPin);
+    } else {
+      const lastPhone = localStorage.getItem('land_app_last_login_phone') || sessionStorage.getItem('pending_auth_phone');
+      if (lastPhone) {
+        setPhone(lastPhone);
+        const savedPin = localStorage.getItem(`pin_${lastPhone}`);
+        if (savedPin) {
+          setPin(savedPin);
+          setSelectedOption('pin');
+        }
+      }
+    }
+  }, [location]);
 
   const isTamil = language === 'ta';
 
@@ -143,8 +177,22 @@ export default function Login() {
       try {
         const user = await authService.loginWithPin(phone, pin);
         login(user);
+
+        // Save credentials if rememberMe is enabled
+        if (rememberMe) {
+          saveCredentials({
+            option: 'pin',
+            phone: phone.trim(),
+            pin: pin.trim(),
+            remember: true
+          });
+        } else {
+          clearSavedCredentials();
+        }
+
         const state = location.state as { from?: { pathname: string } };
-        navigate(state?.from?.pathname || '/', { replace: true });
+        const dest = state?.from?.pathname || (isAdminUser(user) ? '/admin/dashboard' : '/');
+        navigate(dest, { replace: true });
       } catch (err: any) {
         if (
           err.message &&
@@ -193,8 +241,22 @@ export default function Login() {
       try {
         const user = await authService.loginWithEmail(email, password);
         login(user);
+
+        // Save credentials if rememberMe is enabled
+        if (rememberMe) {
+          saveCredentials({
+            option: 'email',
+            email: email.trim(),
+            password: password,
+            remember: true
+          });
+        } else {
+          clearSavedCredentials();
+        }
+
         const state = location.state as { from?: { pathname: string } };
-        navigate(state?.from?.pathname || '/', { replace: true });
+        const dest = state?.from?.pathname || (isAdminUser(user) ? '/admin/dashboard' : '/');
+        navigate(dest, { replace: true });
       } catch (err: any) {
         setError(
           err.message ||
@@ -260,8 +322,18 @@ export default function Login() {
         try {
           const result = await authService.verifyOtp(phone, otpCode);
           login(result.user);
+
+          if (rememberMe) {
+            saveCredentials({
+              option: 'phone',
+              phone: phone.trim(),
+              remember: true
+            });
+          }
+
           const state = location.state as { from?: { pathname: string } };
-          navigate(state?.from?.pathname || '/', { replace: true });
+          const dest = state?.from?.pathname || (isAdminUser(result.user) ? '/admin/dashboard' : '/');
+          navigate(dest, { replace: true });
         } catch (err: any) {
           setError(err.message || 'Invalid OTP. Please check the code.');
         } finally {
@@ -404,7 +476,7 @@ export default function Login() {
             </p>
           </div>
         ) : (
-          <form onSubmit={handleSubmit} className={styles.credentialsContainer} noValidate>
+          <form onSubmit={handleSubmit} method="post" autoComplete="on" className={styles.credentialsContainer} noValidate>
             {/* Selected Option Mini-Banner */}
             <div className={styles.selectedBanner}>
               <div className={styles.selectedBannerLeft}>
@@ -433,6 +505,8 @@ export default function Login() {
                   <div className={styles.phoneNumber}>
                     <Input
                       type="tel"
+                      name="username"
+                      autoComplete="username tel"
                       id="login-phone-pin"
                       placeholder={t('auth.mobilePlaceholder')}
                       value={phone}
@@ -454,6 +528,8 @@ export default function Login() {
                   <Input
                     label={isTamil ? '4-இலக்க பாதுகாப்பு PIN / கடவுச்சொல் *' : '4-Digit Security PIN / Password *'}
                     type="password"
+                    name="password"
+                    autoComplete="current-password"
                     id="login-pin-field"
                     placeholder="••••"
                     value={pin}
@@ -483,6 +559,8 @@ export default function Login() {
                 <Input
                   label={isTamil ? 'மின்னஞ்சல் முகவரி *' : 'Email Address *'}
                   type="email"
+                  name="username"
+                  autoComplete="username email"
                   id="login-email-field"
                   placeholder="name@example.com"
                   value={email}
@@ -500,6 +578,8 @@ export default function Login() {
                   <Input
                     label={isTamil ? 'கடவுச்சொல் (Password) *' : 'Account Password *'}
                     type="password"
+                    name="password"
+                    autoComplete="current-password"
                     id="login-password-field"
                     placeholder="••••••••"
                     value={password}
@@ -573,6 +653,25 @@ export default function Login() {
                 )}
               </>
             )}
+
+            {/* Remember Credentials Checkbox: Save Login ID and Password */}
+            <div style={{ marginTop: '0.5rem', marginBottom: '1.25rem', padding: '0.25rem 0' }}>
+              <Checkbox
+                label={
+                  <span style={{ fontSize: '0.85rem', color: 'var(--color-text-secondary)', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                    <Lock size={14} style={{ color: 'var(--color-primary, #0284c7)' }} />
+                    <span style={{ fontWeight: 500 }}>
+                      {isTamil
+                        ? 'உள்நுழைவு ஐடி மற்றும் கடவுச்சொல்லை சேமிக்கவும் (Save Login ID & Password)'
+                        : 'Save my Login ID and Password on this device'}
+                    </span>
+                  </span>
+                }
+                checked={rememberMe}
+                onChange={(e) => setRememberMe(e.target.checked)}
+                id="remember-credentials-checkbox"
+              />
+            </div>
 
             {/* Submit Button */}
             <Button

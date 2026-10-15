@@ -1,8 +1,8 @@
 import { type Property } from '../data/mockProperties';
+import { BACKEND_URL } from '../config/api';
 
 const CUSTOM_PROPERTIES_KEY = 'landSellingApp_customProperties';
 const RECENTLY_VIEWED_KEY = 'land_selling_app_recently_viewed';
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
 
 export const getCustomProperties = (): Property[] => {
   const data = localStorage.getItem(CUSTOM_PROPERTIES_KEY);

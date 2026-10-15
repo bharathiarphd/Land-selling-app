@@ -66,7 +66,8 @@ export interface Complaint {
   notes?: string;
 }
 
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
+import { BACKEND_URL } from '../config/api';
+
 const AUTH_STORAGE_KEY = 'land_selling_app_token';
 
 // Complaints stored locally or synced with backend

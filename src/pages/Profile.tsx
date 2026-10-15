@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Phone, Mail, ShieldCheck, LogOut, Settings, Bell, Heart, Home, Edit2, Check, X } from 'lucide-react';
+import { Phone, Mail, ShieldCheck, LogOut, Settings, Bell, Heart, Home, Edit2, Check, X, Shield } from 'lucide-react';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { authService } from '../services/authService';
+import { isAdminUser } from '../utils/adminAuth';
 import styles from './Auth.module.css';
 
 export default function Profile() {
@@ -90,10 +91,18 @@ export default function Profile() {
         <div style={{ flex: 1 }}>
           <h2 style={{ fontSize: 'var(--font-size-xl)', fontWeight: 'var(--font-weight-bold)', display: 'flex', alignItems: 'center', gap: 'var(--spacing-2)' }}>
             {user.name}
-            {user.isVerified && <span style={{ display: 'inline-flex', backgroundColor: 'var(--color-success-bg)', color: 'var(--color-success-text)', padding: '2px 8px', borderRadius: '12px', fontSize: '10px' }}><ShieldCheck size={12} style={{ marginRight: '4px' }}/> {language === 'ta' ? 'சரிபார்க்கப்பட்டது' : 'Verified'}</span>}
+            {isAdminUser(user) ? (
+              <span style={{ display: 'inline-flex', backgroundColor: 'rgba(2, 132, 199, 0.15)', color: '#0284c7', padding: '2px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 600 }}>
+                👑 {language === 'ta' ? 'முதன்மை நிர்வாகி' : 'Super Admin'}
+              </span>
+            ) : user.isVerified ? (
+              <span style={{ display: 'inline-flex', backgroundColor: 'var(--color-success-bg)', color: 'var(--color-success-text)', padding: '2px 8px', borderRadius: '12px', fontSize: '10px' }}><ShieldCheck size={12} style={{ marginRight: '4px' }}/> {language === 'ta' ? 'சரிபார்க்கப்பட்டது' : 'Verified'}</span>
+            ) : null}
           </h2>
           <div style={{ color: 'var(--color-text-secondary)', fontSize: 'var(--font-size-sm)', marginTop: 'var(--spacing-1)' }}>
-            {language === 'ta' ? (user.role === 'Buyer' ? 'வாங்குபவர்' : user.role === 'Seller' ? 'விற்பனையாளர்' : 'முகவர்') : user.role} {language === 'ta' ? 'கணக்கு' : 'Account'}
+            {isAdminUser(user) 
+              ? (language === 'ta' ? 'அங்கீகரிக்கப்பட்ட நிர்வாகக் கணக்கு (ID: 8248843385)' : 'Authorized Admin Account (ID: 8248843385)')
+              : `${language === 'ta' ? (user.role === 'Buyer' ? 'வாங்குபவர்' : user.role === 'Seller' ? 'விற்பனையாளர்' : 'முகவர்') : user.role} ${language === 'ta' ? 'கணக்கு' : 'Account'}`}
           </div>
         </div>
       </div>
@@ -181,6 +190,13 @@ export default function Profile() {
       </div>
 
       <div className={styles.formCard} style={{ marginBottom: 'var(--spacing-6)', padding: '0' }}>
+        {isAdminUser(user) && (
+          <div onClick={() => navigate('/admin/dashboard')} style={{ padding: 'var(--spacing-4)', borderBottom: '1px solid var(--color-border)', display: 'flex', alignItems: 'center', gap: 'var(--spacing-3)', cursor: 'pointer', backgroundColor: 'rgba(2, 132, 199, 0.05)' }}>
+            <Shield size={20} color="#0284c7" />
+            <span style={{ fontWeight: 600, color: '#0284c7', flex: 1 }}>{language === 'ta' ? 'நிர்வாக குழு பலகை (Admin Panel)' : 'Admin Control Panel'}</span>
+            <span style={{ fontSize: '11px', backgroundColor: '#0284c7', color: '#fff', padding: '2px 6px', borderRadius: '4px' }}>8248843385</span>
+          </div>
+        )}
         <div onClick={() => navigate('/my-properties')} style={{ padding: 'var(--spacing-4)', borderBottom: '1px solid var(--color-border)', display: 'flex', alignItems: 'center', gap: 'var(--spacing-3)', cursor: 'pointer' }}>
           <Home size={20} color="var(--color-primary)" />
           <span style={{ fontWeight: 'var(--font-weight-medium)', flex: 1 }}>{language === 'ta' ? 'எனது சொத்துகள்' : 'My Properties'}</span>

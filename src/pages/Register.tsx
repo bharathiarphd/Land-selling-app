@@ -8,6 +8,7 @@ import { Checkbox } from '../components/Checkbox';
 import { authService, type UserRole, type RegisterData } from '../services/authService';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
+import { saveCredentials } from '../utils/adminAuth';
 import styles from './Auth.module.css';
 
 export default function Register() {
@@ -96,7 +97,16 @@ export default function Register() {
       // 3. Direct registration (message/SMS send stopped temporarily)
       const { user } = await authService.registerDirect(registrationPayload);
 
-      // 4. Log in immediately and navigate
+      // 4. Save login ID and PIN password for easy auto-login
+      saveCredentials({
+        option: 'pin',
+        phone: formData.phone.trim(),
+        pin: formData.pin.trim(),
+        email: formData.email.trim(),
+        remember: true
+      });
+
+      // 5. Log in immediately and navigate
       login(user);
       const state = location.state as { from?: { pathname: string } };
       navigate(state?.from?.pathname || '/', { replace: true });

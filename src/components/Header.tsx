@@ -14,12 +14,16 @@ import {
 import { Logo } from './Logo';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
+import { isAdminUser, getDisplayUserId } from '../utils/adminAuth';
 import styles from './Header.module.css';
 
 export function Header() {
-  const { isAuthenticated } = useAuth();
+  const { user, isAuthenticated } = useAuth();
   const { language, setLanguage, t } = useLanguage();
   const location = useLocation();
+
+  const isAdmin = isAdminUser(user);
+  const displayId = getDisplayUserId(user);
 
   const toggleLanguage = () => {
     setLanguage(language === 'en' ? 'ta' : 'en');
@@ -31,7 +35,8 @@ export function Header() {
     { path: '/map-search', label: 'Map', icon: MapPin },
     { path: '/buyer-requirements', label: 'Demand', icon: TrendingUp },
     { path: '/add-property', label: t('nav.addProperty') || 'Add Property', icon: PlusCircle },
-    { path: '/admin', label: 'Admin Panel', icon: Shield },
+    // Admin Panel is strictly shown ONLY when the logged-in user ID is 8248843385
+    ...(isAdmin ? [{ path: '/admin', label: 'Admin Panel', icon: Shield }] : []),
   ];
 
   return (
@@ -134,49 +139,42 @@ export function Header() {
             <Bell size={20} color={location.pathname === '/notifications' ? 'var(--color-primary, #0284c7)' : 'currentColor'} />
           </Link>
           
-          {/* Profile Symbol: GREEN when logged in, RED when not logged in */}
-          <Link
-            to={isAuthenticated ? '/profile' : '/login'}
-            className={styles.iconBtn}
-            style={{
-              color: isAuthenticated ? '#16a34a' : '#dc2626',
-              backgroundColor: isAuthenticated ? 'rgba(22, 163, 74, 0.1)' : 'rgba(220, 38, 38, 0.1)',
-              border: `1.5px solid ${isAuthenticated ? '#86efac' : '#fca5a5'}`,
-              padding: '6px',
-              borderRadius: '50%',
-              display: 'inline-flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              position: 'relative',
-              transition: 'all 0.2s ease',
-              textDecoration: 'none'
-            }}
-            title={
-              isAuthenticated 
-                ? (language === 'ta' ? 'சுயவிவரம் (உள்நுழைந்துள்ளது - பச்சை)' : 'Profile (Logged In - Green)') 
-                : (language === 'ta' ? 'உள்நுழைவு (உள்நுழையவில்லை - சிவப்பு)' : 'Login (Not Logged In - Red)')
-            }
-          >
-            <User
-              size={20}
-              color={isAuthenticated ? '#16a34a' : '#dc2626'}
-              strokeWidth={2.2}
-            />
-            {/* Online Status Dot Badge */}
-            <span
-              style={{
-                position: 'absolute',
-                bottom: '-1px',
-                right: '-1px',
-                width: '8px',
-                height: '8px',
-                borderRadius: '50%',
-                backgroundColor: isAuthenticated ? '#16a34a' : '#dc2626',
-                border: '1.5px solid #ffffff',
-                boxShadow: isAuthenticated ? '0 0 6px rgba(22, 163, 74, 0.6)' : '0 0 6px rgba(220, 38, 38, 0.6)'
-              }}
-            />
-          </Link>
+          {/* Profile & Logged In ID Display: Shows logged-in ID for all users */}
+          {isAuthenticated && user ? (
+            <Link
+              to="/profile"
+              className={`${styles.userBadge} ${isAdmin ? styles.userBadgeAdmin : ''}`}
+              title={
+                language === 'ta'
+                  ? `உள்நுழைவு ஐடி: ${displayId} (${isAdmin ? 'நிர்வாகி' : 'சுயவிவரம்'})`
+                  : `Logged In ID: ${displayId} (${isAdmin ? 'Admin' : 'Profile'})`
+              }
+              id="header-user-profile-badge"
+            >
+              <div className={`${styles.userAvatar} ${isAdmin ? styles.userAvatarAdmin : ''}`}>
+                <User size={16} strokeWidth={2.4} />
+                <span className={styles.userStatusDot} />
+              </div>
+              <div className={styles.userInfo}>
+                <span className={`${styles.userRoleLabel} ${isAdmin ? styles.userRoleLabelAdmin : ''}`}>
+                  {isAdmin ? '👑 Admin' : (language === 'ta' ? 'ஐடி (ID)' : 'User ID')}
+                </span>
+                <span className={styles.userIdText}>
+                  {displayId}
+                </span>
+              </div>
+            </Link>
+          ) : (
+            <Link
+              to="/login"
+              className={styles.loginBadge}
+              title={language === 'ta' ? 'உள்நுழைவு' : 'Login'}
+              id="header-login-btn"
+            >
+              <User size={16} strokeWidth={2.2} />
+              <span>{language === 'ta' ? 'உள்நுழைவு' : 'Login'}</span>
+            </Link>
+          )}
         </div>
       </div>
     </header>

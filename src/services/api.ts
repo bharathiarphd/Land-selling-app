@@ -8,7 +8,7 @@ import {
   syncPropertiesFromBackend 
 } from '../utils/propertyUtils';
 
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
+import { BACKEND_URL } from '../config/api';
 
 export const api = {
   getProperties: async (): Promise<Property[]> => {
