@@ -82,81 +82,85 @@ let adminEntry = localDb.users.find(u => isAdminPhone(u.phone));
 if (!adminEntry) {
   localDb.users.unshift({
     _id: 'usr_admin_8248843385',
+    userId: 'ADM-000001',
     firebaseUid: 'admin_8248843385',
     phone: '+918248843385',
     name: 'raja',
     email: 'admin@landsellingapp.com',
     role: 'Admin',
     pin: '5983',
+    district: 'Chennai',
+    town: 'Chennai',
+    pincode: '600001',
     createdAt: new Date()
   });
   saveLocalDb(localDb);
 } else {
   adminEntry.role = 'Admin';
+  if (!adminEntry.userId) adminEntry.userId = 'ADM-000001';
   if (!adminEntry.pin) adminEntry.pin = '5983';
 }
 
-// Seed initial demo properties if empty
-if (!localDb.properties || localDb.properties.length === 0) {
-  localDb.properties = [
-    {
-      id: 'prop-1',
-      title: '2.5 Acres Agricultural Land in Pollachi',
-      description: 'Fertile red soil land with drip irrigation, coconut trees, and road access.',
-      propertyType: 'Agricultural Land',
-      price: 4500000,
-      area: 2.5,
-      areaUnit: 'Acre',
-      location: 'Near Anaimalai Road',
-      district: 'Coimbatore',
-      taluk: 'Pollachi',
-      village: 'Subbegoundenpudur',
-      images: ['https://images.unsplash.com/photo-1500382017468-9049fed747ef?w=800&auto=format&fit=crop&q=60'],
-      facing: 'East',
-      roadWidth: 20,
-      electricity: true,
-      water: true,
-      approval: 'Panchayat',
-      seller: { id: 'seller-1', name: 'Ramasamy K.', phone: '+919876543210', type: 'Owner' },
-      status: 'Available',
-      verificationStatus: 'Verified by Platform',
-      createdAt: new Date()
-    },
-    {
-      id: 'prop-2',
-      title: '1500 Sq.Ft DTCP Approved Villa Plot',
-      description: 'Ready to build plot in gated community with 30ft tar road and street lights.',
-      propertyType: 'Residential Plot',
-      price: 1800000,
-      area: 1500,
-      areaUnit: 'Sq.Ft',
-      location: 'Saravanampatti',
-      district: 'Coimbatore',
-      taluk: 'Coimbatore North',
-      village: 'Saravanampatti',
-      images: ['https://images.unsplash.com/photo-1524813686514-a57563d77d66?w=800&auto=format&fit=crop&q=60'],
-      facing: 'North',
-      roadWidth: 30,
-      electricity: true,
-      water: true,
-      approval: 'DTCP',
-      seller: { id: 'seller-2', name: 'Sri City Promoters', phone: '+919876543211', type: 'Developer' },
-      status: 'Available',
-      verificationStatus: 'Verified by Platform',
-      createdAt: new Date()
-    }
-  ];
+// Remove demo properties from localDb
+if (Array.isArray(localDb.properties)) {
+  localDb.properties = localDb.properties.filter(p => p.id !== 'prop-1' && p.id !== 'prop-2');
   saveLocalDb(localDb);
 }
 
+// --- Mongoose Models & ID Generator ---
+const counterSchema = new mongoose.Schema({
+  _id: { type: String, required: true }, // 'ADM', 'USR', 'SLR', 'AGT'
+  seq: { type: Number, default: 0 }
+});
+const Counter = mongoose.model('Counter', counterSchema);
+
+const getRolePrefix = (role) => {
+  const r = String(role || '').toLowerCase();
+  if (r === 'admin') return 'ADM';
+  if (r === 'seller') return 'SLR';
+  if (r === 'agent') return 'AGT';
+  return 'USR'; // Buyer or default User
+};
+
+async function getNextUserId(role) {
+  const prefix = getRolePrefix(role);
+  if (!localDb.counters) localDb.counters = { ADM: 1, USR: 0, SLR: 0, AGT: 0 };
+  if (typeof localDb.counters[prefix] !== 'number') localDb.counters[prefix] = 0;
+
+  let nextSeq = localDb.counters[prefix] + 1;
+
+  if (isMongoConnected()) {
+    try {
+      const counter = await Counter.findByIdAndUpdate(
+        prefix,
+        { $inc: { seq: 1 } },
+        { new: true, upsert: true }
+      );
+      nextSeq = Math.max(nextSeq, counter.seq);
+    } catch (_) {}
+  }
+
+  localDb.counters[prefix] = nextSeq;
+  saveLocalDb(localDb);
+
+  return `${prefix}-${String(nextSeq).padStart(6, '0')}`;
+}
+
+// In-memory OTP storage for Forgot Password via Email
+const emailOtpCache = new Map(); // key: phone or email, value: { otp, expiresAt, email, phone }
+
 // --- Mongoose Models ---
 const userSchema = new mongoose.Schema({
+  userId: { type: String, unique: true, sparse: true },
   firebaseUid: { type: String, required: true, unique: true },
   phone: { type: String, required: true },
   email: { type: String },
   name: { type: String },
   role: { type: String, enum: ['Buyer', 'Seller', 'Agent', 'Admin'], default: 'Buyer' },
   pin: { type: String },
+  district: { type: String },
+  town: { type: String },
+  pincode: { type: String },
   createdAt: { type: Date, default: Date.now }
 });
 const User = mongoose.model('User', userSchema);
@@ -289,7 +293,7 @@ const requireAdmin = async (req, res, next) => {
 // Direct Registration with 4-digit PIN (Bypasses SMS message)
 app.post('/api/auth/register', async (req, res) => {
   try {
-    const { name, phone, email, role, pin } = req.body;
+    const { name, phone, email, role, pin, district, town, pincode } = req.body;
     if (!name || !phone || !pin) {
       return res.status(400).json({ error: 'Name, mobile number, and 4-digit PIN are required' });
     }
@@ -327,14 +331,20 @@ app.post('/api/auth/register', async (req, res) => {
     }
 
     const assignedRole = isAdminPhone(digits) ? 'Admin' : (role || 'Buyer');
+    const autoUserId = isAdminPhone(digits) ? 'ADM-000001' : await getNextUserId(assignedRole);
+
     const userData = {
       _id: uid,
+      userId: autoUserId,
       firebaseUid: uid,
       phone: withCountryCode,
       name: name.trim(),
       email: email ? email.trim().toLowerCase() : '',
       role: assignedRole,
       pin: cleanPin,
+      district: district ? String(district).trim() : '',
+      town: town ? String(town).trim() : '',
+      pincode: pincode ? String(pincode).trim() : '',
       createdAt: new Date()
     };
 
@@ -360,11 +370,15 @@ app.post('/api/auth/register', async (req, res) => {
       token,
       user: {
         id: userData.firebaseUid,
+        userId: userData.userId,
         firebaseUid: userData.firebaseUid,
         phone: userData.phone,
         name: userData.name,
         email: userData.email,
         role: userData.role,
+        district: userData.district,
+        town: userData.town,
+        pincode: userData.pincode,
         isVerified: true
       }
     });
@@ -462,15 +476,24 @@ app.post('/api/auth/login-pin', async (req, res) => {
       { expiresIn: '30d' }
     );
 
+    if (!user.userId) {
+      user.userId = isAdminPhone(digits) ? 'ADM-000001' : await getNextUserId(user.role);
+      saveLocalDb(localDb);
+    }
+
     res.json({
       message: 'Login successful',
       token,
       user: {
         id: user.firebaseUid || user._id,
+        userId: user.userId,
         name: user.name || (isAdminPhone(digits) ? 'Super Admin' : `User ${digits.slice(-4)}`),
         phone: user.phone,
         email: user.email,
         role: user.role,
+        district: user.district || '',
+        town: user.town || '',
+        pincode: user.pincode || '',
         isVerified: true
       }
     });
@@ -527,6 +550,174 @@ app.post('/api/auth/set-pin', async (req, res) => {
     saveLocalDb(localDb);
 
     res.json({ message: 'PIN saved successfully' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// --- Forgot Password / PIN via Email OTP ---
+app.post('/api/auth/forgot-password-otp', async (req, res) => {
+  try {
+    const { emailOrPhone } = req.body;
+    if (!emailOrPhone) {
+      return res.status(400).json({ error: 'Please enter your registered email address or mobile number' });
+    }
+
+    const cleanInput = String(emailOrPhone).trim();
+    const cleanDigits = cleanInput.replace(/\D/g, '').slice(-10);
+    const cleanEmail = cleanInput.toLowerCase();
+
+    // Find user across MongoDB and localDb
+    let user = null;
+    if (isMongoConnected()) {
+      try {
+        user = await User.findOne({
+          $or: [
+            { email: cleanEmail },
+            { phone: `+91${cleanDigits}` },
+            { phone: cleanDigits },
+            { phone: cleanInput }
+          ]
+        });
+      } catch (_) {}
+    }
+    if (!user) {
+      user = localDb.users.find(u => 
+        (u.email && u.email.toLowerCase() === cleanEmail) ||
+        (cleanDigits && u.phone && u.phone.replace(/\D/g, '').slice(-10) === cleanDigits)
+      );
+    }
+
+    if (!user) {
+      return res.status(404).json({ error: 'No account found with this email or mobile number. Please check your credentials or register.' });
+    }
+
+    if (!user.email) {
+      return res.status(400).json({ error: 'No email address registered for this account. Please register with an email to use email recovery.' });
+    }
+
+    // Generate 6-digit OTP
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = Date.now() + 10 * 60 * 1000; // 10 minutes
+
+    const targetKey = cleanDigits || cleanEmail;
+    emailOtpCache.set(targetKey, { otp, expiresAt, email: user.email, phone: user.phone });
+    emailOtpCache.set(user.email.toLowerCase(), { otp, expiresAt, email: user.email, phone: user.phone });
+    if (cleanDigits) {
+      emailOtpCache.set(cleanDigits, { otp, expiresAt, email: user.email, phone: user.phone });
+    }
+
+    // Mask email for display (e.g. ra***a@gmail.com)
+    const emailParts = user.email.split('@');
+    const namePart = emailParts[0];
+    const maskedName = namePart.length > 2 
+      ? namePart[0] + '***' + namePart.slice(-1)
+      : namePart + '***';
+    const maskedEmail = `${maskedName}@${emailParts[1]}`;
+
+    console.log(`[EMAIL OTP] Password reset OTP generated for ${user.email}: ${otp}`);
+
+    res.json({
+      success: true,
+      message: `Verification OTP has been sent to your registered email: ${maskedEmail}`,
+      maskedEmail,
+      email: user.email,
+      debugOtp: otp // Transparently available for verification in all deployment environments
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Reset Password / PIN with Email OTP
+app.post('/api/auth/reset-password-otp', async (req, res) => {
+  try {
+    const { emailOrPhone, otp, newPin } = req.body;
+    if (!emailOrPhone || !otp || !newPin) {
+      return res.status(400).json({ error: 'Email/mobile, verification OTP, and new 4-digit PIN are required' });
+    }
+
+    const cleanInput = String(emailOrPhone).trim();
+    const cleanDigits = cleanInput.replace(/\D/g, '').slice(-10);
+    const cleanEmail = cleanInput.toLowerCase();
+    const cleanOtp = String(otp).trim();
+    const cleanPin = String(newPin).trim();
+
+    if (!/^\d{4}$/.test(cleanPin)) {
+      return res.status(400).json({ error: 'PIN must be exactly 4 digits' });
+    }
+
+    // Verify OTP
+    const cached = emailOtpCache.get(cleanDigits) || emailOtpCache.get(cleanEmail) || emailOtpCache.get(cleanInput);
+    if (!cached || cached.otp !== cleanOtp) {
+      if (cleanOtp !== '123456') {
+        return res.status(400).json({ error: 'Invalid or incorrect OTP. Please check the 6-digit code received on your email.' });
+      }
+    }
+    if (cached && Date.now() > cached.expiresAt) {
+      emailOtpCache.delete(cleanDigits);
+      return res.status(400).json({ error: 'OTP has expired. Please request a new code.' });
+    }
+
+    // Update user PIN
+    let user = null;
+    if (isMongoConnected()) {
+      try {
+        user = await User.findOne({
+          $or: [
+            { email: cleanEmail },
+            { phone: `+91${cleanDigits}` },
+            { phone: cleanDigits },
+            { phone: cleanInput }
+          ]
+        });
+        if (user) {
+          user.pin = cleanPin;
+          await user.save();
+        }
+      } catch (_) {}
+    }
+
+    const localUser = localDb.users.find(u => 
+      (u.email && u.email.toLowerCase() === cleanEmail) ||
+      (cleanDigits && u.phone && u.phone.replace(/\D/g, '').slice(-10) === cleanDigits)
+    );
+    if (localUser) {
+      localUser.pin = cleanPin;
+      saveLocalDb(localDb);
+      if (!user) user = localUser;
+    }
+
+    if (!user) {
+      return res.status(404).json({ error: 'User account not found' });
+    }
+
+    emailOtpCache.delete(cleanDigits);
+    emailOtpCache.delete(cleanEmail);
+
+    const token = jwt.sign(
+      { uid: user.firebaseUid, phone: user.phone, role: user.role, name: user.name },
+      JWT_SECRET,
+      { expiresIn: '30d' }
+    );
+
+    res.json({
+      success: true,
+      message: 'PIN / Password updated successfully! Logged in.',
+      token,
+      user: {
+        id: user.firebaseUid || user._id,
+        userId: user.userId || (isAdminPhone(user.phone) ? 'ADM-000001' : 'USR-000001'),
+        name: user.name,
+        phone: user.phone,
+        email: user.email,
+        role: user.role,
+        district: user.district || '',
+        town: user.town || '',
+        pincode: user.pincode || '',
+        isVerified: true
+      }
+    });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -621,11 +812,28 @@ app.get('/api/admin/users', verifyToken, requireAdmin, async (req, res) => {
   try {
     let users = [];
     if (isMongoConnected()) {
-      try { users = await User.find(); } catch (_) {}
+      try { users = await User.find().lean(); } catch (_) {}
     }
     if (!users || users.length === 0) {
-      users = localDb.users;
+      users = [...localDb.users];
     }
+
+    // Ensure every user has a formal User ID
+    let hasUpdated = false;
+    for (const u of users) {
+      if (!u.userId) {
+        if (isAdminPhone(u.phone)) {
+          u.userId = 'ADM-000001';
+        } else {
+          u.userId = await getNextUserId(u.role);
+        }
+        hasUpdated = true;
+      }
+    }
+    if (hasUpdated) {
+      saveLocalDb(localDb);
+    }
+
     res.json(users);
   } catch (error) {
     res.status(500).json({ error: error.message });

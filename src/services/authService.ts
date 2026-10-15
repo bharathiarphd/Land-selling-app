@@ -2,10 +2,14 @@ export type UserRole = 'Buyer' | 'Seller' | 'Agent' | 'Admin';
 
 export interface User {
   id: string; 
+  userId?: string; // ADM-000001, USR-000001, SLR-000001, AGT-000001
   name: string;
   phone: string;
   email?: string;
   role: UserRole;
+  district?: string;
+  town?: string;
+  pincode?: string;
   isVerified: boolean;
 }
 
@@ -15,6 +19,9 @@ export interface RegisterData {
   email: string;
   role: UserRole;
   pin: string;
+  district?: string;
+  town?: string;
+  pincode?: string;
 }
 
 import { auth } from '../firebase';
@@ -53,10 +60,14 @@ export const authService = {
           const data = await response.json();
           const user: User = {
             id: data.user.firebaseUid || data.user._id,
+            userId: data.user.userId || localUser?.userId,
             name: data.user.name || localUser?.name || 'User',
             email: data.user.email || localUser?.email,
             phone: data.user.phone || localUser?.phone || '',
             role: (data.user.role as UserRole) || localUser?.role || 'Buyer',
+            district: data.user.district || localUser?.district,
+            town: data.user.town || localUser?.town,
+            pincode: data.user.pincode || localUser?.pincode,
             isVerified: true
           };
           localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(user));
@@ -436,7 +447,10 @@ export const authService = {
           phone: cleanPhone,
           email: data.email.trim(),
           role: data.role,
-          pin: cleanPin
+          pin: cleanPin,
+          district: data.district ? data.district.trim() : undefined,
+          town: data.town ? data.town.trim() : undefined,
+          pincode: data.pincode ? data.pincode.trim() : undefined
         })
       });
 
@@ -455,10 +469,14 @@ export const authService = {
 
       const user: User = {
         id: resData.user.id || resData.user.firebaseUid,
+        userId: resData.user.userId,
         name: resData.user.name,
         phone: resData.user.phone,
         email: resData.user.email,
         role: resData.user.role || 'Buyer',
+        district: resData.user.district,
+        town: resData.user.town,
+        pincode: resData.user.pincode,
         isVerified: true
       };
 
@@ -491,13 +509,19 @@ export const authService = {
       }
 
       // Offline / Local client fallback
+      const prefix = data.role === 'Admin' ? 'ADM' : data.role === 'Seller' ? 'SLR' : data.role === 'Agent' ? 'AGT' : 'USR';
+      const mockIdNum = Math.floor(1000 + Math.random() * 9000);
       const mockToken = `mock-token-${Date.now()}`;
       const user: User = {
         id: `usr_${Date.now()}`,
+        userId: `${prefix}-${String(mockIdNum).padStart(6, '0')}`,
         name: data.name.trim(),
         phone: cleanPhone,
         email: data.email.trim(),
         role: data.role || 'Buyer',
+        district: data.district,
+        town: data.town,
+        pincode: data.pincode,
         isVerified: true
       };
 
@@ -546,10 +570,14 @@ export const authService = {
 
       const user: User = {
         id: data.user.id || data.user.firebaseUid,
+        userId: data.user.userId,
         name: data.user.name,
         phone: data.user.phone,
         email: data.user.email,
         role: data.user.role || 'Buyer',
+        district: data.user.district,
+        town: data.user.town,
+        pincode: data.user.pincode,
         isVerified: true
       };
 
@@ -622,5 +650,105 @@ export const authService = {
     } catch (_) {}
     localStorage.removeItem(AUTH_STORAGE_KEY);
     localStorage.removeItem(USER_STORAGE_KEY);
+  },
+
+  // Forgot Password: Request OTP to user's registered Email
+  async requestForgotPasswordOtp(emailOrPhone: string): Promise<{ success: boolean; message: string; maskedEmail: string; debugOtp?: string }> {
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/auth/forgot-password-otp`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ emailOrPhone: emailOrPhone.trim() })
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to send OTP to email');
+      }
+      return data;
+    } catch (err: any) {
+      if (err.message && !err.message.includes('Failed to fetch') && !err.message.includes('NetworkError')) {
+        throw err;
+      }
+      // Offline fallback: check registered_users
+      const savedUsersRaw = localStorage.getItem('registered_users') || '{}';
+      const reg = JSON.parse(savedUsersRaw);
+      const digits = emailOrPhone.replace(/\D/g, '').slice(-10);
+      let foundUser: any = null;
+      for (const k of Object.keys(reg)) {
+        const u = reg[k];
+        if (
+          (u.email && u.email.toLowerCase() === emailOrPhone.trim().toLowerCase()) ||
+          (digits && u.phone && u.phone.includes(digits))
+        ) {
+          foundUser = u;
+          break;
+        }
+      }
+      if (!foundUser) {
+        throw new Error('No registered account found with this email or mobile number.');
+      }
+      const mockOtp = '123456';
+      sessionStorage.setItem('forgot_password_pending', emailOrPhone);
+      sessionStorage.setItem('forgot_password_otp', mockOtp);
+      const masked = foundUser.email ? foundUser.email.replace(/(.{2})(.*)(@.*)/, '$1***$3') : 'registered email';
+      return {
+        success: true,
+        message: `OTP sent to registered email: ${masked}`,
+        maskedEmail: masked,
+        debugOtp: mockOtp
+      };
+    }
+  },
+
+  // Reset Password / PIN with Email OTP
+  async resetPasswordWithOtp(emailOrPhone: string, otp: string, newPin: string): Promise<{ user: User; message: string }> {
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/auth/reset-password-otp`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ emailOrPhone: emailOrPhone.trim(), otp: otp.trim(), newPin: newPin.trim() })
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to reset password');
+      }
+      localStorage.setItem(AUTH_STORAGE_KEY, data.token);
+      localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(data.user));
+      const digits = data.user.phone ? data.user.phone.replace(/\D/g, '').slice(-10) : '';
+      if (digits) {
+        localStorage.setItem(`pin_${digits}`, newPin);
+        localStorage.setItem(`pin_+91${digits}`, newPin);
+        localStorage.setItem('user_pin', newPin);
+      }
+      return data;
+    } catch (err: any) {
+      if (err.message && !err.message.includes('Failed to fetch') && !err.message.includes('NetworkError')) {
+        throw err;
+      }
+      // Offline fallback
+      const savedUsersRaw = localStorage.getItem('registered_users') || '{}';
+      const reg = JSON.parse(savedUsersRaw);
+      const digits = emailOrPhone.replace(/\D/g, '').slice(-10);
+      let foundUser: any = null;
+      for (const k of Object.keys(reg)) {
+        const u = reg[k];
+        if (
+          (u.email && u.email.toLowerCase() === emailOrPhone.trim().toLowerCase()) ||
+          (digits && u.phone && u.phone.includes(digits))
+        ) {
+          foundUser = u;
+          break;
+        }
+      }
+      if (!foundUser) throw new Error('User account not found.');
+      if (otp !== '123456') throw new Error('Invalid OTP. Use test code 123456.');
+      
+      const cleanDigits = foundUser.phone.replace(/\D/g, '').slice(-10);
+      localStorage.setItem(`pin_${cleanDigits}`, newPin);
+      localStorage.setItem(`pin_+91${cleanDigits}`, newPin);
+      localStorage.setItem('user_pin', newPin);
+
+      return { user: foundUser, message: 'Password updated successfully!' };
+    }
   }
 };

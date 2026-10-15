@@ -4,8 +4,11 @@ import { Input } from '../components/Input';
 import { Button } from '../components/Button';
 import { useNavigate } from 'react-router-dom';
 
+import { useAuth } from '../context/AuthContext';
+
 export default function PostRequirement() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [formData, setFormData] = useState({
     propertyType: 'Plot',
     district: '',
@@ -20,11 +23,28 @@ export default function PostRequirement() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    // Mock API submission
+    const newReq = {
+      id: `req-${Date.now()}`,
+      buyer: user?.name || 'Registered Buyer',
+      phone: user?.phone || '',
+      type: formData.propertyType,
+      district: formData.district || 'Tamil Nadu',
+      area: `${formData.minArea || '1'} - ${formData.maxArea || '5'} Acres`,
+      budget: formData.budget || 'Negotiable',
+      posted: 'Just now',
+      match: 95,
+      details: formData.details || `${formData.propertyType} needed for ${formData.purpose}`
+    };
+    try {
+      const existing = JSON.parse(localStorage.getItem('land_buyer_requirements') || '[]');
+      existing.unshift(newReq);
+      localStorage.setItem('land_buyer_requirements', JSON.stringify(existing));
+    } catch (_) {}
+
     setTimeout(() => {
       setSubmitted(true);
       setTimeout(() => navigate('/buyer-requirements'), 2000);
-    }, 800);
+    }, 500);
   };
 
   if (submitted) {

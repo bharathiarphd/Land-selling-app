@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
-import { MapPin, Phone, Mail, KeyRound, ArrowRight, ShieldCheck, AlertCircle, RefreshCw, Lock } from 'lucide-react';
+import { MapPin, Phone, Mail, KeyRound, ArrowRight, ArrowLeft, CheckCircle2, ShieldCheck, AlertCircle, RefreshCw, Lock } from 'lucide-react';
 import { Input } from '../components/Input';
 import { Button } from '../components/Button';
 import { Checkbox } from '../components/Checkbox';
@@ -72,6 +72,17 @@ export default function Login() {
   // OTP flow sub-state for 'phone' option
   const [otpSent, setOtpSent] = useState(false);
   const [otpCode, setOtpCode] = useState('');
+
+  // Forgot Password via Email OTP states
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
+  const [forgotIdentifier, setForgotIdentifier] = useState('');
+  const [forgotOtp, setForgotOtp] = useState('');
+  const [forgotNewPin, setForgotNewPin] = useState('');
+  const [forgotStep, setForgotStep] = useState<1 | 2>(1);
+  const [forgotMaskedEmail, setForgotMaskedEmail] = useState('');
+  const [forgotError, setForgotError] = useState('');
+  const [forgotSuccess, setForgotSuccess] = useState('');
+  const [forgotLoading, setForgotLoading] = useState(false);
 
   const { t, language } = useLanguage();
   const { user, login } = useAuth();
@@ -343,6 +354,59 @@ export default function Login() {
     }
   };
 
+  const handleRequestForgotOtp = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    setForgotError('');
+    setForgotSuccess('');
+    if (!forgotIdentifier.trim()) {
+      setForgotError(isTamil ? 'தயவுசெய்து உங்கள் பதிவு செய்த மின்னஞ்சல் அல்லது கைபேசி எண்ணை உள்ளிடவும்' : 'Please enter your registered email address or mobile number');
+      return;
+    }
+    setForgotLoading(true);
+    try {
+      const res = await authService.requestForgotPasswordOtp(forgotIdentifier.trim());
+      setForgotMaskedEmail(res.maskedEmail || 'registered email');
+      setForgotStep(2);
+      setForgotSuccess(res.message || (isTamil ? 'OTP உங்கள் பதிவுசெய்த மின்னஞ்சல் முகவரிக்கு அனுப்பப்பட்டுள்ளது' : 'OTP sent to your registered email address'));
+    } catch (err: any) {
+      setForgotError(err.message || (isTamil ? 'OTP அனுப்ப முடியவில்லை. விவரங்களை சரிபார்க்கவும்.' : 'Failed to send OTP. Please check your credentials.'));
+    } finally {
+      setForgotLoading(false);
+    }
+  };
+
+  const handleResetPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setForgotError('');
+    if (!forgotOtp || forgotOtp.trim().length !== 6) {
+      setForgotError(isTamil ? 'தயவுசெய்து சரியான 6-இலக்க OTP குறியீட்டை உள்ளிடவும்' : 'Please enter the 6-digit OTP code received on email');
+      return;
+    }
+    if (!forgotNewPin || !/^\d{4}$/.test(forgotNewPin.trim())) {
+      setForgotError(isTamil ? 'புதிய PIN கடவுச்சொல் சரியாக 4 இலக்கங்களாக இருக்க வேண்டும்' : 'New PIN must be exactly 4 digits');
+      return;
+    }
+    setForgotLoading(true);
+    try {
+      const res = await authService.resetPasswordWithOtp(forgotIdentifier.trim(), forgotOtp.trim(), forgotNewPin.trim());
+      login(res.user);
+      saveCredentials({
+        option: 'pin',
+        phone: res.user.phone || '',
+        pin: forgotNewPin.trim(),
+        email: res.user.email || '',
+        remember: true
+      });
+      const state = location.state as { from?: { pathname: string } };
+      const dest = state?.from?.pathname || (isAdminUser(res.user) ? '/admin/dashboard' : '/');
+      navigate(dest, { replace: true });
+    } catch (err: any) {
+      setForgotError(err.message || (isTamil ? 'கடவுச்சொல் மாற்றுதல் தோல்வியடைந்தது' : 'Failed to reset password. Please check OTP code.'));
+    } finally {
+      setForgotLoading(false);
+    }
+  };
+
   const handleTestSimulator = async () => {
     if (!phone || !validatePhone(phone)) {
       setError(isTamil ? 'தயவுசெய்து சரியான 10-இலக்க கைபேசி எண்ணை உள்ளிடவும்' : 'Please enter a valid 10-digit mobile number');
@@ -376,6 +440,216 @@ export default function Login() {
       </div>
 
       <div className={styles.formCard}>
+        {showForgotPassword ? (
+          <div className={styles.forgotPasswordCard} style={{ padding: '0.5rem 0' }}>
+            <div style={{ display: 'flex', alignItems: 'center', marginBottom: '1.25rem' }}>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowForgotPassword(false);
+                  setForgotError('');
+                  setForgotSuccess('');
+                }}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  color: 'var(--color-primary, #0284c7)',
+                  padding: '4px 8px',
+                  borderRadius: '6px',
+                  fontSize: '0.9rem',
+                  fontWeight: 500
+                }}
+                id="back-to-login-btn"
+              >
+                <ArrowLeft size={18} />
+                <span>{isTamil ? 'உள்நுழைவுக்கு திரும்புக' : 'Back to Login'}</span>
+              </button>
+            </div>
+
+            <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
+              <div style={{
+                width: '52px',
+                height: '52px',
+                borderRadius: '50%',
+                background: 'rgba(2, 132, 199, 0.1)',
+                color: 'var(--color-primary, #0284c7)',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginBottom: '0.75rem'
+              }}>
+                <KeyRound size={26} />
+              </div>
+              <h2 style={{ fontSize: '1.35rem', fontWeight: 700, margin: '0 0 6px 0', color: 'var(--color-text)' }}>
+                {isTamil ? 'கடவுச்சொல் / PIN மீட்டமை' : 'Reset Password / PIN'}
+              </h2>
+              <p style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary)', margin: 0 }}>
+                {isTamil
+                  ? 'பதிவு செய்த மின்னஞ்சல் முகவரிக்கு 6-இலக்க OTP அனுப்பப்படும்'
+                  : 'We will send a 6-digit verification OTP to your registered email ID'}
+              </p>
+            </div>
+
+            {forgotError && (
+              <div className={styles.errorAlert} role="alert" style={{ marginBottom: '1.25rem' }}>
+                <AlertCircle size={18} style={{ flexShrink: 0, marginTop: 1 }} />
+                <span>{forgotError}</span>
+              </div>
+            )}
+
+            {forgotSuccess && (
+              <div style={{
+                padding: '0.75rem 1rem',
+                backgroundColor: 'rgba(34, 197, 94, 0.1)',
+                border: '1px solid rgba(34, 197, 94, 0.3)',
+                borderRadius: '8px',
+                color: '#16a34a',
+                fontSize: '0.875rem',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                marginBottom: '1.25rem'
+              }}>
+                <CheckCircle2 size={18} style={{ flexShrink: 0 }} />
+                <span>{forgotSuccess}</span>
+              </div>
+            )}
+
+            {forgotStep === 1 ? (
+              <form onSubmit={handleRequestForgotOtp} noValidate>
+                <div style={{ marginBottom: '1.25rem' }}>
+                  <Input
+                    label={isTamil ? 'பதிவுசெய்த மின்னஞ்சல் அல்லது கைபேசி எண் *' : 'Registered Email or Mobile Number *'}
+                    type="text"
+                    placeholder={isTamil ? 'name@gmail.com அல்லது 9876543210' : 'name@example.com or 9876543210'}
+                    value={forgotIdentifier}
+                    onChange={(e) => {
+                      setForgotIdentifier(e.target.value);
+                      setForgotError('');
+                    }}
+                    autoFocus
+                  />
+                  <span style={{ fontSize: '0.8rem', color: 'var(--color-text-secondary)', marginTop: '6px', display: 'block' }}>
+                    {isTamil
+                      ? 'உங்கள் கணக்கில் இணைக்கப்பட்ட மின்னஞ்சல் முகவரிக்கு OTP குறியீடு அனுப்பப்படும்.'
+                      : 'A secure 6-digit OTP will be sent to the email associated with this account.'}
+                  </span>
+                </div>
+
+                <Button
+                  type="submit"
+                  className={styles.submitBtn}
+                  disabled={forgotLoading}
+                  style={{ width: '100%' }}
+                  id="send-mail-otp-btn"
+                >
+                  {forgotLoading ? (
+                    <>
+                      <div className={styles.spinner} />
+                      <span>{isTamil ? 'OTP அனுப்பப்படுகிறது...' : 'Sending OTP to Mail...'}</span>
+                    </>
+                  ) : (
+                    <>
+                      <Mail size={18} />
+                      <span>{isTamil ? 'மின்னஞ்சலுக்கு OTP அனுப்புக' : 'Send OTP to Email'}</span>
+                    </>
+                  )}
+                </Button>
+              </form>
+            ) : (
+              <form onSubmit={handleResetPassword} noValidate>
+                <div style={{
+                  padding: '0.75rem 1rem',
+                  backgroundColor: 'var(--color-bg-secondary, #f8fafc)',
+                  border: '1px solid var(--color-border, #e2e8f0)',
+                  borderRadius: '8px',
+                  marginBottom: '1.25rem',
+                  fontSize: '0.875rem'
+                }}>
+                  <span style={{ color: 'var(--color-text-secondary)' }}>
+                    {isTamil ? 'OTP அனுப்பப்பட்ட மின்னஞ்சல்: ' : 'OTP sent to: '}
+                  </span>
+                  <strong style={{ color: 'var(--color-primary, #0284c7)' }}>{forgotMaskedEmail}</strong>
+                </div>
+
+                <div style={{ marginBottom: '1.25rem' }}>
+                  <Input
+                    label={isTamil ? 'மின்னஞ்சலுக்கு வந்த 6-இலக்க OTP *' : '6-Digit Email OTP *'}
+                    type="tel"
+                    maxLength={6}
+                    placeholder="••••••"
+                    value={forgotOtp}
+                    onChange={(e) => {
+                      setForgotOtp(e.target.value.replace(/\D/g, '').substring(0, 6));
+                      setForgotError('');
+                    }}
+                    style={{ letterSpacing: '0.35em', fontSize: '1.2rem', textAlign: 'center', fontWeight: '600' }}
+                    autoFocus
+                  />
+                </div>
+
+                <div style={{ marginBottom: '1.5rem' }}>
+                  <Input
+                    label={isTamil ? 'புதிய 4-இலக்க PIN கடவுச்சொல் *' : 'New 4-Digit Password / PIN *'}
+                    type="password"
+                    maxLength={4}
+                    placeholder="••••"
+                    value={forgotNewPin}
+                    onChange={(e) => {
+                      setForgotNewPin(e.target.value.replace(/\D/g, '').substring(0, 4));
+                      setForgotError('');
+                    }}
+                    style={{ letterSpacing: '0.4em', fontSize: '1.2rem', textAlign: 'center', fontWeight: '600' }}
+                    helperText={isTamil ? 'இனி இந்த 4-இலக்க PIN ஐப் பயன்படுத்தி நேரடியாக உள்நுழையலாம்' : 'You can log in directly using this new 4-digit PIN'}
+                  />
+                </div>
+
+                <Button
+                  type="submit"
+                  className={styles.submitBtn}
+                  disabled={forgotLoading}
+                  style={{ width: '100%', marginBottom: '1rem' }}
+                  id="reset-pin-submit-btn"
+                >
+                  {forgotLoading ? (
+                    <>
+                      <div className={styles.spinner} />
+                      <span>{isTamil ? 'மாற்றப்படுகிறது...' : 'Resetting Password...'}</span>
+                    </>
+                  ) : (
+                    <>
+                      <KeyRound size={18} />
+                      <span>{isTamil ? 'கடவுச்சொல்லை மாற்றி உள்நுழைக' : 'Reset PIN & Login'}</span>
+                    </>
+                  )}
+                </Button>
+
+                <div style={{ textAlign: 'center' }}>
+                  <button
+                    type="button"
+                    onClick={() => handleRequestForgotOtp()}
+                    disabled={forgotLoading}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: 'var(--color-primary, #0284c7)',
+                      fontSize: '0.85rem',
+                      cursor: 'pointer',
+                      fontWeight: 500
+                    }}
+                  >
+                    {isTamil ? 'OTP மீண்டும் மின்னஞ்சலுக்கு அனுப்புக' : 'Resend OTP to Email'}
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        ) : (
+          <>
         {/* Step 1: One-by-One Login Selection */}
         <div className={styles.optionsSection}>
           <div className={styles.sectionLabel}>
@@ -550,6 +824,31 @@ export default function Login() {
                     }}
                   />
                 </div>
+
+                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '4px', marginBottom: '8px' }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowForgotPassword(true);
+                      setForgotIdentifier(phone || email);
+                      setForgotStep(1);
+                      setForgotError('');
+                      setForgotSuccess('');
+                    }}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: 'var(--color-primary, #0284c7)',
+                      fontSize: '0.85rem',
+                      fontWeight: 500,
+                      cursor: 'pointer',
+                      padding: 0
+                    }}
+                    id="forgot-pin-btn"
+                  >
+                    {isTamil ? 'கடவுச்சொல் / PIN மறந்துவிட்டதா?' : 'Forgot Password / PIN?'}
+                  </button>
+                </div>
               </>
             )}
 
@@ -591,6 +890,31 @@ export default function Login() {
                     error={fieldErrors.password}
                     helperText={isTamil ? 'உங்கள் கணக்கு கடவுச்சொல்லை உள்ளிடவும்' : 'Enter your account password'}
                   />
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '4px', marginBottom: '8px' }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowForgotPassword(true);
+                      setForgotIdentifier(email || phone);
+                      setForgotStep(1);
+                      setForgotError('');
+                      setForgotSuccess('');
+                    }}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: 'var(--color-primary, #0284c7)',
+                      fontSize: '0.85rem',
+                      fontWeight: 500,
+                      cursor: 'pointer',
+                      padding: 0
+                    }}
+                    id="forgot-email-password-btn"
+                  >
+                    {isTamil ? 'கடவுச்சொல் மறந்துவிட்டதா?' : 'Forgot Password?'}
+                  </button>
                 </div>
               </>
             )}
@@ -713,6 +1037,8 @@ export default function Login() {
               </div>
             )}
           </form>
+        )}
+          </>
         )}
 
         <div id="recaptcha-container"></div>

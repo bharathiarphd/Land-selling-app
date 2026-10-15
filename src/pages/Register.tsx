@@ -11,6 +11,49 @@ import { useLanguage } from '../context/LanguageContext';
 import { saveCredentials } from '../utils/adminAuth';
 import styles from './Auth.module.css';
 
+const DISTRICT_OPTIONS = [
+  { value: '', label: '-- Select District / மாவட்டம் தேர்ந்தெடுக்கவும் --' },
+  { value: 'Ariyalur', label: 'Ariyalur (அரியலூர்)' },
+  { value: 'Chengalpattu', label: 'Chengalpattu (செங்கல்பட்டு)' },
+  { value: 'Chennai', label: 'Chennai (சென்னை)' },
+  { value: 'Coimbatore', label: 'Coimbatore (கோயம்புத்தூர்)' },
+  { value: 'Cuddalore', label: 'Cuddalore (கடலூர்)' },
+  { value: 'Dharmapuri', label: 'Dharmapuri (தருமபுரி)' },
+  { value: 'Dindigul', label: 'Dindigul (திண்டுக்கல்)' },
+  { value: 'Erode', label: 'Erode (ஈரோடு)' },
+  { value: 'Kallakurichi', label: 'Kallakurichi (கள்ளக்குறிச்சி)' },
+  { value: 'Kancheepuram', label: 'Kancheepuram (காஞ்சிபுரம்)' },
+  { value: 'Kanniyakumari', label: 'Kanniyakumari (கன்னியாகுமரி)' },
+  { value: 'Karur', label: 'Karur (கரூர்)' },
+  { value: 'Krishnagiri', label: 'Krishnagiri (கிருஷ்ணகிரி)' },
+  { value: 'Madurai', label: 'Madurai (மதுரை)' },
+  { value: 'Mayiladuthurai', label: 'Mayiladuthurai (மயிலாடுதுறை)' },
+  { value: 'Nagapattinam', label: 'Nagapattinam (நாகப்பட்டினம்)' },
+  { value: 'Namakkal', label: 'Namakkal (நாமக்கல்)' },
+  { value: 'Nilgiris', label: 'Nilgiris (நீலகிரி)' },
+  { value: 'Perambalur', label: 'Perambalur (பெரம்பலூர்)' },
+  { value: 'Pudukkottai', label: 'Pudukkottai (புதுக்கோட்டை)' },
+  { value: 'Ramanathapuram', label: 'Ramanathapuram (இராமநாதபுரம்)' },
+  { value: 'Ranipet', label: 'Ranipet (ராணிப்பேட்டை)' },
+  { value: 'Salem', label: 'Salem (சேலம்)' },
+  { value: 'Sivagangai', label: 'Sivagangai (சிவகங்கை)' },
+  { value: 'Tenkasi', label: 'Tenkasi (தென்காசி)' },
+  { value: 'Thanjavur', label: 'Thanjavur (தஞ்சாவூர்)' },
+  { value: 'Theni', label: 'Theni (தேனி)' },
+  { value: 'Thoothukudi', label: 'Thoothukudi (தூத்துக்குடி)' },
+  { value: 'Tiruchirappalli', label: 'Tiruchirappalli (திருச்சிராப்பள்ளி)' },
+  { value: 'Tirunelveli', label: 'Tirunelveli (திருநெல்வேலி)' },
+  { value: 'Tirupathur', label: 'Tirupathur (திருப்பத்தூர்)' },
+  { value: 'Tiruppur', label: 'Tiruppur (திருப்பூர்)' },
+  { value: 'Tiruvallur', label: 'Tiruvallur (திருவள்ளூர்)' },
+  { value: 'Tiruvannamalai', label: 'Tiruvannamalai (திருவண்ணாமலை)' },
+  { value: 'Tiruvarur', label: 'Tiruvarur (திருவாரூர்)' },
+  { value: 'Vellore', label: 'Vellore (வேலூர்)' },
+  { value: 'Viluppuram', label: 'Viluppuram (விழுப்புரம்)' },
+  { value: 'Virudhunagar', label: 'Virudhunagar (விருதுநகர்)' },
+  { value: 'Other', label: 'Other State / பிற மாநிலம்' }
+];
+
 export default function Register() {
   const location = useLocation();
   const prefilledPhone = (location.state as { phone?: string })?.phone || sessionStorage.getItem('pending_auth_phone') || '';
@@ -23,7 +66,10 @@ export default function Register() {
     phone: prefilledPhone.replace(/\D/g, '').slice(-10),
     email: '',
     pin: '',
-    role: 'Buyer' as UserRole
+    role: 'Buyer' as UserRole,
+    district: '',
+    town: '',
+    pincode: ''
   });
 
   // Password masked by default for security with eye icon toggle
@@ -34,6 +80,7 @@ export default function Register() {
 
   const validatePhone = (p: string) => /^[6-9]\d{9}$/.test(p);
   const validateEmail = (e: string) => /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(e.trim());
+  const validatePincode = (pin: string) => /^\d{6}$/.test(pin.trim());
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -53,6 +100,20 @@ export default function Register() {
       newErrors.email = language === 'ta' ? 'மின்னஞ்சல் முகவரி அவசியம்' : 'Email address is required';
     } else if (!validateEmail(formData.email)) {
       newErrors.email = language === 'ta' ? 'சரியான மின்னஞ்சலை உள்ளிடவும் (எ.கா. name@example.com)' : 'Please enter a valid email address (e.g. name@example.com)';
+    }
+
+    if (!formData.district.trim()) {
+      newErrors.district = language === 'ta' ? 'தயவுசெய்து உங்கள் மாவட்டத்தைத் தேர்ந்தெடுக்கவும்' : 'Please select your district';
+    }
+
+    if (!formData.town.trim()) {
+      newErrors.town = language === 'ta' ? 'தயவுசெய்து உங்கள் உள்ளூர் நகரம் / கிராமத்தை உள்ளிடவும்' : 'Please enter your local town/village';
+    }
+
+    if (!formData.pincode.trim()) {
+      newErrors.pincode = language === 'ta' ? 'அஞ்சல் குறியீட்டு எண் (PIN Code) அவசியம்' : 'Postal PIN code is required';
+    } else if (!validatePincode(formData.pincode)) {
+      newErrors.pincode = language === 'ta' ? 'சரியான 6-இலக்க அஞ்சல் குறியீட்டை உள்ளிடவும்' : 'Please enter a valid 6-digit postal PIN code';
     }
 
     if (!formData.pin) {
@@ -85,13 +146,16 @@ export default function Register() {
         return;
       }
 
-      // 2. Prepare registration data with own 4-digit PIN
+      // 2. Prepare registration data with own 4-digit PIN and location details
       const registrationPayload: RegisterData = {
         name: formData.name.trim(),
         phone: formData.phone.trim(),
         email: formData.email.trim().toLowerCase(),
         role: formData.role,
-        pin: formData.pin.trim()
+        pin: formData.pin.trim(),
+        district: formData.district.trim(),
+        town: formData.town.trim(),
+        pincode: formData.pincode.trim()
       };
 
       // 3. Direct registration (message/SMS send stopped temporarily)
@@ -175,6 +239,51 @@ export default function Register() {
               onChange={e => { setFormData({ ...formData, email: e.target.value }); setErrors({ ...errors, email: '' }); }}
               error={errors.email}
             />
+          </div>
+
+          {/* District Selection */}
+          <div style={{ marginBottom: 'var(--spacing-4)' }}>
+            <Select
+              label={language === 'ta' ? 'மாவட்டம் (District) *' : 'District *'}
+              value={formData.district}
+              onChange={e => {
+                setFormData({ ...formData, district: e.target.value });
+                setErrors({ ...errors, district: '' });
+              }}
+              options={DISTRICT_OPTIONS}
+              error={errors.district}
+            />
+          </div>
+
+          {/* Local Town and Postal PIN Code */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: 'var(--spacing-4)' }}>
+            <div>
+              <Input
+                label={language === 'ta' ? 'உள்ளூர் நகரம் / கிராமம் *' : 'Local Town / Village *'}
+                placeholder={language === 'ta' ? 'எ.கா. பொள்ளாச்சி / Sulur' : 'e.g. Pollachi, Sulur'}
+                value={formData.town}
+                onChange={e => {
+                  setFormData({ ...formData, town: e.target.value });
+                  setErrors({ ...errors, town: '' });
+                }}
+                error={errors.town}
+              />
+            </div>
+            <div>
+              <Input
+                label={language === 'ta' ? 'அஞ்சல் குறியீடு (PIN) *' : 'Postal PIN Code *'}
+                type="tel"
+                placeholder="641001"
+                maxLength={6}
+                value={formData.pincode}
+                onChange={e => {
+                  const val = e.target.value.replace(/\D/g, '').substring(0, 6);
+                  setFormData({ ...formData, pincode: val });
+                  setErrors({ ...errors, pincode: '' });
+                }}
+                error={errors.pincode}
+              />
+            </div>
           </div>
 
           {/* 4-digit Password / PIN - Visible first password, no second confirm password */}

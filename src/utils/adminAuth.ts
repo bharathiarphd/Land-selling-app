@@ -35,11 +35,40 @@ export function isAdminUser(user: User | null | undefined): boolean {
 }
 
 /**
+ * Generates local sequential user ID for offline resilience (ADM-000001, USR-000001, SLR-000001, AGT-000001)
+ * Never reuses deleted IDs and avoids duplicates.
+ */
+export function generateLocalUserId(role: string): string {
+  const r = String(role || '').toLowerCase();
+  let prefix = 'USR';
+  if (r === 'admin') prefix = 'ADM';
+  else if (r === 'seller') prefix = 'SLR';
+  else if (r === 'agent') prefix = 'AGT';
+
+  try {
+    const raw = localStorage.getItem('land_app_id_counters');
+    const counters = raw ? JSON.parse(raw) : { ADM: 1, USR: 0, SLR: 0, AGT: 0 };
+    counters[prefix] = (counters[prefix] || 0) + 1;
+    localStorage.setItem('land_app_id_counters', JSON.stringify(counters));
+    return `${prefix}-${String(counters[prefix]).padStart(6, '0')}`;
+  } catch (_) {
+    return `${prefix}-000001`;
+  }
+}
+
+/**
  * Returns a clean, readable identifier for any logged-in user to show in the header.
+ * Prioritizes the formal User ID (ADM-000001, USR-000001, SLR-000001, AGT-000001).
  */
 export function getDisplayUserId(user: User | null | undefined): string {
   if (!user) return '';
 
+  // 1. Prioritize formal unique User ID (e.g. ADM-000001, USR-000001)
+  if (user.userId && /^[A-Z]{3}-\d{6}$/.test(user.userId)) {
+    return user.userId;
+  }
+
+  // 2. Mobile number
   const cleanPhone = (user.phone || '').replace(/\D/g, '').slice(-10);
   if (cleanPhone && cleanPhone !== '9876543210') {
     return cleanPhone;

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Bell, Search, Trash2 } from 'lucide-react';
 import { Button } from '../components/Button';
 import { useNavigate } from 'react-router-dom';
@@ -6,20 +6,29 @@ import { useNavigate } from 'react-router-dom';
 interface SavedSearch {
   id: string;
   name: string;
-  criteria: any; // Simplified for mock
+  criteria: any;
   notifications: boolean;
   dateAdded: string;
 }
 
-// Mock initial data
-const MOCK_SAVED = [
-  { id: '1', name: 'Plots in OMR under 50L', criteria: { type: 'Plot', location: 'OMR', maxPrice: 5000000 }, notifications: true, dateAdded: '2023-11-01' },
-  { id: '2', name: 'Farm Land 1-5 Acres', criteria: { type: 'Farm Land', minArea: 1, maxArea: 5, unit: 'Acre' }, notifications: false, dateAdded: '2023-11-05' }
-];
+const STORAGE_KEY = 'land_saved_searches';
 
 export default function SavedSearches() {
   const navigate = useNavigate();
-  const [searches, setSearches] = useState<SavedSearch[]>(MOCK_SAVED);
+  const [searches, setSearches] = useState<SavedSearch[]>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(searches));
+    } catch (_) {}
+  }, [searches]);
 
   const toggleNotification = (id: string) => {
     setSearches(searches.map(s => s.id === id ? { ...s, notifications: !s.notifications } : s));
@@ -34,7 +43,7 @@ export default function SavedSearches() {
       <h1 className="h2" style={{ marginBottom: 'var(--spacing-6)' }}>Saved Searches</h1>
 
       {searches.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: 'var(--spacing-8)', backgroundColor: 'var(--color-surface)', borderRadius: 'var(--radius-lg)' }}>
+        <div style={{ textAlign: 'center', padding: 'var(--spacing-8)', backgroundColor: 'var(--color-surface)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border)' }}>
           <Search size={48} color="var(--color-text-muted)" style={{ margin: '0 auto var(--spacing-4)' }} />
           <h3 className="h4" style={{ marginBottom: 'var(--spacing-2)' }}>No saved searches</h3>
           <p style={{ color: 'var(--color-text-secondary)', marginBottom: 'var(--spacing-4)' }}>Save your search criteria to receive alerts when new matching properties are added.</p>
@@ -60,15 +69,9 @@ export default function SavedSearches() {
                   </button>
                 </div>
               </div>
-              <div style={{ display: 'flex', gap: 'var(--spacing-2)', flexWrap: 'wrap' }}>
-                {Object.entries(s.criteria).map(([key, value]) => (
-                  <span key={key} style={{ backgroundColor: 'var(--color-background)', padding: '4px 8px', borderRadius: '12px', fontSize: 'var(--font-size-xs)' }}>
-                    {key}: {value as string}
-                  </span>
-                ))}
-              </div>
-              <div>
-                <Button variant="outline" onClick={() => navigate('/search')} style={{ width: '100%' }}>View Results</Button>
+
+              <div style={{ display: 'flex', gap: 'var(--spacing-2)' }}>
+                <Button size="sm" variant="outline" onClick={() => navigate('/search')}>Run Search</Button>
               </div>
             </div>
           ))}
