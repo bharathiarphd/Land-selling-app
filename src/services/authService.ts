@@ -305,17 +305,112 @@ export const authService = {
   },
 
   async loginWithEmail(email: string, _password?: string): Promise<User> {
+    const cleanEmail = email.trim().toLowerCase();
+
+    // Check if user was registered with this email
+    let phone = '';
+    let name = cleanEmail.split('@')[0];
+    let role: UserRole = 'Buyer';
+
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/auth/login-email`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: cleanEmail })
+      });
+      if (response.ok) {
+        const data = await response.json();
+        const user: User = {
+          id: data.user.id || data.user.firebaseUid,
+          name: data.user.name || name,
+          email: cleanEmail,
+          phone: (data.user.phone && !data.user.phone.includes('9876543210')) ? data.user.phone : '',
+          role: data.user.role || 'Buyer',
+          isVerified: true
+        };
+        localStorage.setItem(AUTH_STORAGE_KEY, data.token);
+        localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(user));
+        return user;
+      }
+    } catch (_) {}
+
+    try {
+      const savedUsersRaw = localStorage.getItem('registered_users') || '{}';
+      const registeredUsers = JSON.parse(savedUsersRaw);
+      for (const key of Object.keys(registeredUsers)) {
+        if (registeredUsers[key]?.email?.toLowerCase() === cleanEmail) {
+          const p = registeredUsers[key].phone;
+          if (p && !p.includes('9876543210')) phone = p;
+          name = registeredUsers[key].name || name;
+          role = registeredUsers[key].role || role;
+          break;
+        }
+      }
+    } catch (_) {}
+
     const user: User = {
       id: `usr_email_${Date.now()}`,
-      name: email.split('@')[0],
-      email: email,
-      phone: '+919876543210',
-      role: 'Buyer',
+      name: name,
+      email: cleanEmail,
+      phone: phone, // No hardcoded placeholder
+      role: role,
       isVerified: true
     };
     localStorage.setItem(AUTH_STORAGE_KEY, `mock-token-${Date.now()}`);
     localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(user));
     return user;
+  },
+
+  async updateProfile(updates: { name?: string; phone?: string; email?: string }): Promise<User> {
+    const localUserRaw = localStorage.getItem(USER_STORAGE_KEY);
+    const localUser: User = localUserRaw ? JSON.parse(localUserRaw) : { id: `usr_${Date.now()}`, name: 'User', phone: '', role: 'Buyer', isVerified: true };
+
+    let formattedPhone = updates.phone;
+    if (formattedPhone !== undefined) {
+      const digits = formattedPhone.replace(/\D/g, '').slice(-10);
+      formattedPhone = digits ? `+91${digits}` : '';
+    }
+
+    const updatedUser: User = {
+      ...localUser,
+      ...(updates.name ? { name: updates.name.trim() } : {}),
+      ...(formattedPhone !== undefined ? { phone: formattedPhone } : {}),
+      ...(updates.email ? { email: updates.email.trim().toLowerCase() } : {})
+    };
+
+    localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(updatedUser));
+
+    // Save in registered_users map
+    try {
+      const savedUsersRaw = localStorage.getItem('registered_users') || '{}';
+      const registeredUsers = JSON.parse(savedUsersRaw);
+      if (updatedUser.phone) {
+        const digits = updatedUser.phone.replace(/\D/g, '').slice(-10);
+        registeredUsers[updatedUser.phone] = updatedUser;
+        registeredUsers[digits] = updatedUser;
+      }
+      localStorage.setItem('registered_users', JSON.stringify(registeredUsers));
+    } catch (_) {}
+
+    // Sync with backend
+    try {
+      const token = localStorage.getItem(AUTH_STORAGE_KEY);
+      await fetch(`${BACKEND_URL}/api/users/sync`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({
+          name: updatedUser.name,
+          phone: updatedUser.phone,
+          email: updatedUser.email,
+          role: updatedUser.role
+        })
+      });
+    } catch (_) {}
+
+    return updatedUser;
   },
 
   // Direct Registration with 4-Digit Password/PIN (Bypasses SMS message)
