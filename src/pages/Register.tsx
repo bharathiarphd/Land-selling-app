@@ -1,32 +1,35 @@
 import { useState } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
-import { MapPin, KeyRound, Mail, Phone, User as UserIcon } from 'lucide-react';
+import { MapPin, Eye, EyeOff } from 'lucide-react';
 import { Input } from '../components/Input';
 import { Button } from '../components/Button';
 import { Select } from '../components/Select';
 import { Checkbox } from '../components/Checkbox';
 import { authService, type UserRole, type RegisterData } from '../services/authService';
+import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import styles from './Auth.module.css';
 
 export default function Register() {
   const location = useLocation();
   const prefilledPhone = (location.state as { phone?: string })?.phone || sessionStorage.getItem('pending_auth_phone') || '';
+  const { login } = useAuth();
+  const { t, language } = useLanguage();
+  const navigate = useNavigate();
 
   const [formData, setFormData] = useState({
     name: '',
     phone: prefilledPhone.replace(/\D/g, '').slice(-10),
     email: '',
     pin: '',
-    confirmPin: '',
     role: 'Buyer' as UserRole
   });
+
+  // First password visible by default as requested
+  const [showPin, setShowPin] = useState(true);
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState(false);
-  const { t, language } = useLanguage();
-
-  const navigate = useNavigate();
 
   const validatePhone = (p: string) => /^[6-9]\d{9}$/.test(p);
   const validateEmail = (e: string) => /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(e.trim());
@@ -44,7 +47,7 @@ export default function Register() {
     } else if (!validatePhone(formData.phone)) {
       newErrors.phone = language === 'ta' ? 'தயவுசெய்து சரியான 10-இலக்க கைபேசி எண்ணை உள்ளிடவும்' : 'Please enter a valid 10-digit mobile number';
     }
-    
+
     if (!formData.email.trim()) {
       newErrors.email = language === 'ta' ? 'மின்னஞ்சல் முகவரி அவசியம்' : 'Email address is required';
     } else if (!validateEmail(formData.email)) {
@@ -52,15 +55,9 @@ export default function Register() {
     }
 
     if (!formData.pin) {
-      newErrors.pin = language === 'ta' ? '4-இலக்க பின்னை உள்ளிடவும்' : 'Please enter a 4-digit login PIN';
+      newErrors.pin = language === 'ta' ? '4-இலக்க கடவுச்சொல்லை (PIN) உள்ளிடவும்' : 'Please create a 4-digit password/PIN';
     } else if (!/^\d{4}$/.test(formData.pin)) {
-      newErrors.pin = language === 'ta' ? 'PIN சரியாக 4 இலக்கங்களாக இருக்க வேண்டும்' : 'PIN must be exactly 4 digits';
-    }
-
-    if (!formData.confirmPin) {
-      newErrors.confirmPin = language === 'ta' ? 'PIN-ஐ மீண்டும் உள்ளிடவும்' : 'Please re-enter your PIN';
-    } else if (formData.pin !== formData.confirmPin) {
-      newErrors.confirmPin = language === 'ta' ? 'PINகள் பொருந்தவில்லை' : 'PINs do not match';
+      newErrors.pin = language === 'ta' ? 'கடவுச்சொல் சரியாக 4 இலக்கங்களாக இருக்க வேண்டும்' : 'Password must be exactly 4 digits';
     }
 
     if (!acceptedTerms) {
@@ -78,16 +75,16 @@ export default function Register() {
       // 1. Check if phone is already registered
       const check = await authService.checkUser(formData.phone);
       if (check.exists) {
-        setErrors({ 
-          phone: language === 'ta' 
-            ? 'இந்த கைபேசி எண் ஏற்கனவே பதிவு செய்யப்பட்டுள்ளது! தயவுசெய்து உள்நுழையவும்.' 
-            : 'This mobile number is already registered! Please login directly.' 
+        setErrors({
+          phone: language === 'ta'
+            ? 'இந்த கைபேசி எண் ஏற்கனவே பதிவு செய்யப்பட்டுள்ளது! தயவுசெய்து உள்நுழையவும்.'
+            : 'This mobile number is already registered! Please login directly.'
         });
         setIsLoading(false);
         return;
       }
 
-      // 2. Prepare registration data
+      // 2. Prepare registration data with own 4-digit PIN
       const registrationPayload: RegisterData = {
         name: formData.name.trim(),
         phone: formData.phone.trim(),
@@ -96,20 +93,17 @@ export default function Register() {
         pin: formData.pin.trim()
       };
 
-      // 3. Send OTP
-      const result = await authService.sendOtp(formData.phone);
-      
-      sessionStorage.setItem('pending_auth_phone', formData.phone);
-      sessionStorage.setItem('pending_registration', JSON.stringify(registrationPayload));
-      if (result.isTestMode) {
-        sessionStorage.setItem('test_otp_hint', result.testOtp || '123456');
-      } else {
-        sessionStorage.removeItem('test_otp_hint');
-      }
-      
-      navigate('/verify-otp');
+      // 3. Direct registration (message/SMS send stopped temporarily)
+      const { user } = await authService.registerDirect(registrationPayload);
+
+      // 4. Log in immediately and navigate
+      login(user);
+      const state = location.state as { from?: { pathname: string } };
+      navigate(state?.from?.pathname || '/', { replace: true });
     } catch (err: any) {
-      setErrors({ submit: err.message || (language === 'ta' ? 'கணக்கை உருவாக்க முடியவில்லை. மீண்டும் முயற்சிக்கவும்.' : 'Unable to create account. Please try again.') });
+      setErrors({
+        submit: err.message || (language === 'ta' ? 'கணக்கை உருவாக்க முடியவில்லை. மீண்டும் முயற்சிக்கவும்.' : 'Unable to create account. Please try again.')
+      });
     } finally {
       setIsLoading(false);
     }
@@ -120,7 +114,7 @@ export default function Register() {
       <div className={styles.logo}>
         <MapPin size={48} />
       </div>
-      
+
       <div className={styles.header}>
         <h1 className={styles.title}>{t('auth.register')}</h1>
         <p className={styles.subtitle}>{t('auth.registerSubtitle')}</p>
@@ -128,13 +122,13 @@ export default function Register() {
 
       <div className={styles.formCard}>
         <form onSubmit={handleSubmit}>
-          
+
           <div style={{ marginBottom: 'var(--spacing-4)' }}>
-            <Input 
+            <Input
               label={t('auth.name')}
               placeholder={language === 'ta' ? 'உங்கள் முழு பெயரை உள்ளிடவும்' : 'Enter your full name'}
               value={formData.name}
-              onChange={e => { setFormData({...formData, name: e.target.value}); setErrors({...errors, name: ''}); }}
+              onChange={e => { setFormData({ ...formData, name: e.target.value }); setErrors({ ...errors, name: '' }); }}
               error={errors.name}
             />
           </div>
@@ -147,14 +141,14 @@ export default function Register() {
               <Input value="+91" disabled />
             </div>
             <div className={styles.phoneNumber} style={{ flex: 1 }}>
-              <Input 
+              <Input
                 type="tel"
                 placeholder={t('auth.mobilePlaceholder')}
                 value={formData.phone}
                 onChange={e => {
                   const val = e.target.value.replace(/\D/g, '').substring(0, 10);
-                  setFormData({...formData, phone: val});
-                  setErrors({...errors, phone: ''});
+                  setFormData({ ...formData, phone: val });
+                  setErrors({ ...errors, phone: '' });
                 }}
                 error={errors.phone}
                 maxLength={10}
@@ -163,56 +157,67 @@ export default function Register() {
           </div>
 
           <div style={{ marginBottom: 'var(--spacing-4)' }}>
-            <Input 
+            <Input
               label={language === 'ta' ? 'மின்னஞ்சல் முகவரி *' : 'Email Address *'}
               type="email"
               placeholder={language === 'ta' ? 'உங்கள் மின்னஞ்சலை உள்ளிடவும் (எ.கா. name@gmail.com)' : 'Enter email address (e.g. name@gmail.com)'}
               value={formData.email}
-              onChange={e => { setFormData({...formData, email: e.target.value}); setErrors({...errors, email: ''}); }}
+              onChange={e => { setFormData({ ...formData, email: e.target.value }); setErrors({ ...errors, email: '' }); }}
               error={errors.email}
             />
           </div>
 
-          <div style={{ display: 'flex', gap: '1rem', marginBottom: 'var(--spacing-4)' }}>
-            <div style={{ flex: 1 }}>
-              <Input 
-                label={language === 'ta' ? '4-இலக்க PIN *' : '4-Digit PIN *'}
-                type="password"
-                placeholder="••••"
-                value={formData.pin}
-                onChange={e => {
-                  const val = e.target.value.replace(/\D/g, '').substring(0, 4);
-                  setFormData({...formData, pin: val});
-                  setErrors({...errors, pin: ''});
+          {/* 4-digit Password / PIN - Visible first password, no second confirm password */}
+          <div style={{ marginBottom: 'var(--spacing-4)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--spacing-1)' }}>
+              <label style={{ fontWeight: 'var(--font-weight-medium)', fontSize: '0.9rem' }}>
+                {language === 'ta' ? '4-இலக்க கடவுச்சொல் / PIN *' : '4-Digit Password / PIN *'}
+              </label>
+              <button
+                type="button"
+                onClick={() => setShowPin(!showPin)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  color: 'var(--color-primary, #0284c7)',
+                  fontSize: '0.8rem',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  padding: '2px 6px',
+                  borderRadius: '4px'
                 }}
-                error={errors.pin}
-                maxLength={4}
-                style={{ textAlign: 'center', letterSpacing: '0.4em', fontSize: '1.1rem' }}
-              />
+              >
+                {showPin ? <EyeOff size={16} /> : <Eye size={16} />}
+                <span>{showPin ? (language === 'ta' ? 'மறை' : 'Hide') : (language === 'ta' ? 'காட்டு' : 'Show')}</span>
+              </button>
             </div>
-            <div style={{ flex: 1 }}>
-              <Input 
-                label={language === 'ta' ? 'PIN உறுதிசெய்க *' : 'Confirm PIN *'}
-                type="password"
-                placeholder="••••"
-                value={formData.confirmPin}
-                onChange={e => {
-                  const val = e.target.value.replace(/\D/g, '').substring(0, 4);
-                  setFormData({...formData, confirmPin: val});
-                  setErrors({...errors, confirmPin: ''});
-                }}
-                error={errors.confirmPin}
-                maxLength={4}
-                style={{ textAlign: 'center', letterSpacing: '0.4em', fontSize: '1.1rem' }}
-              />
-            </div>
+            <Input
+              type={showPin ? 'text' : 'password'}
+              placeholder="1234"
+              value={formData.pin}
+              onChange={e => {
+                const val = e.target.value.replace(/\D/g, '').substring(0, 4);
+                setFormData({ ...formData, pin: val });
+                setErrors({ ...errors, pin: '' });
+              }}
+              error={errors.pin}
+              maxLength={4}
+              helperText={language === 'ta' ? 'உள்நுழைவிற்கு இந்த 4-இலக்க கடவுச்சொல்லை பயன்படுத்தலாம்' : 'Use this 4-digit password to log in directly'}
+              style={{
+                letterSpacing: showPin ? '0.3em' : '0.4em',
+                fontSize: '1.2rem',
+                fontWeight: '600'
+              }}
+            />
           </div>
 
           <div style={{ marginBottom: 'var(--spacing-4)' }}>
-            <Select 
+            <Select
               label={t('auth.userType')}
               value={formData.role}
-              onChange={e => setFormData({...formData, role: e.target.value as UserRole})}
+              onChange={e => setFormData({ ...formData, role: e.target.value as UserRole })}
               options={[
                 { value: 'Buyer', label: language === 'ta' ? 'வாங்குபவர்' : 'Buyer' },
                 { value: 'Seller', label: language === 'ta' ? 'விற்பனையாளர்' : 'Seller' },
@@ -222,26 +227,28 @@ export default function Register() {
           </div>
 
           <div style={{ marginBottom: 'var(--spacing-6)' }}>
-            <Checkbox 
+            <Checkbox
               label={
                 <span>
                   {language === 'ta' ? 'நான் ' : 'I agree to the '}<Link to="/terms" className={styles.link}>{language === 'ta' ? 'விதிமுறைகள் & நிபந்தனைகள்' : 'Terms & Conditions'}</Link>{language === 'ta' ? ' மற்றும் ' : ' and '}<Link to="/privacy" className={styles.link}>{language === 'ta' ? 'தனியுரிமைக் கொள்கையை' : 'Privacy Policy'}</Link>{language === 'ta' ? ' ஏற்கிறேன்' : ''}
                 </span>
               }
               checked={acceptedTerms}
-              onChange={e => { setAcceptedTerms(e.target.checked); setErrors({...errors, terms: ''}); }}
+              onChange={e => { setAcceptedTerms(e.target.checked); setErrors({ ...errors, terms: '' }); }}
             />
             {errors.terms && <p style={{ color: 'var(--color-error)', fontSize: 'var(--font-size-sm)', marginTop: 'var(--spacing-1)' }}>{errors.terms}</p>}
           </div>
 
-          {errors.submit && <p style={{ color: 'var(--color-error)', marginBottom: 'var(--spacing-4)', textAlign: 'center' }}>{errors.submit}</p>}
+          {errors.submit && (
+            <div style={{ marginBottom: 'var(--spacing-4)', textAlign: 'center' }}>
+              <p style={{ color: 'var(--color-error)' }}>{errors.submit}</p>
+            </div>
+          )}
 
           <Button type="submit" style={{ width: '100%' }} disabled={isLoading}>
             {isLoading ? (language === 'ta' ? 'கணக்கு உருவாக்கப்படுகிறது...' : 'Creating Account...') : t('auth.createAccount')}
           </Button>
         </form>
-        
-        <div id="recaptcha-container"></div>
 
         <div className={styles.footer}>
           {language === 'ta' ? 'ஏற்கனவே கணக்கு உள்ளதா?' : 'Already have an account?'} <Link to="/login" className={styles.link}>{t('auth.login')}</Link>
