@@ -37,8 +37,20 @@
   color: var(--color-text-secondary);
 }
 
+.tableResponsive {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  margin-bottom: var(--spacing-4);
+  scrollbar-width: thin;
+}
+
 .table {
   width: 100%;
+  min-width: 500px;
   border-collapse: collapse;
   text-align: left;
 }
@@ -50,6 +62,7 @@
   text-transform: uppercase;
   color: var(--color-text-muted);
   border-bottom: 1px solid var(--color-border);
+  white-space: nowrap;
 }
 
 .table td {
@@ -111,3 +124,47 @@
 .actionLink:hover {
   text-decoration: underline;
 }
+
+/* Compact Mobile Dashboard Adaptations */
+@media (max-width: 640px) {
+  .statsGrid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--spacing-2);
+  }
+
+  .statCard {
+    padding: var(--spacing-3);
+    gap: var(--spacing-2);
+    border-radius: var(--radius-md);
+  }
+
+  .statIcon {
+    width: 36px;
+    height: 36px;
+  }
+
+  .statValue {
+    font-size: var(--font-size-xl);
+  }
+
+  .statLabel {
+    font-size: var(--font-size-xs);
+  }
+
+  .table th {
+    padding: var(--spacing-2) var(--spacing-3);
+    font-size: 11px;
+  }
+
+  .table td {
+    padding: var(--spacing-2) var(--spacing-3);
+    font-size: var(--font-size-xs);
+  }
+}
+
+@media (max-width: 380px) {
+  .statsGrid {
+    grid-template-columns: 1fr;
+  }
+}
+

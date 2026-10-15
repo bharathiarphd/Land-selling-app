@@ -58,7 +58,7 @@ input, textarea, select {
 /* Mobile First Layout Adjustments */
 .layout-content {
   padding-top: var(--header-height);
-  padding-bottom: calc(var(--bottom-nav-height) + var(--spacing-4));
+  padding-bottom: calc(var(--bottom-nav-height) + var(--spacing-3));
   min-height: 100vh;
 }
 
@@ -75,12 +75,40 @@ input, textarea, select {
   border-width: 0;
 }
 
-/* Media Queries */
-@media (min-width: 320px) {}
-@media (min-width: 360px) {}
-@media (min-width: 390px) {}
-@media (min-width: 412px) {}
+/* Responsive Table Wrapper - Prevents horizontal page scrolling */
+.table-responsive,
+.table-container {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  margin-bottom: var(--spacing-4);
+  scrollbar-width: thin;
+}
 
+/* Compact Mobile Optimizations */
+@media (max-width: 640px) {
+  .container {
+    padding: 0 var(--spacing-3);
+  }
+
+  .layout-content {
+    padding-bottom: calc(var(--bottom-nav-height) + var(--spacing-2));
+  }
+
+  .h1 { font-size: 1.5rem; }
+  .h2 { font-size: 1.3rem; }
+  .h3 { font-size: 1.15rem; }
+  .body-text { font-size: 0.925rem; }
+  .price-text { font-size: 1.15rem; }
+
+  /* Compact button styling on small screens */
+  button, input, select, textarea {
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+}
+
+/* Media Queries */
 @media (min-width: 768px) {
   .container {
     max-width: 768px;
@@ -101,3 +129,4 @@ input, textarea, select {
     max-width: 1280px;
   }
 }
+

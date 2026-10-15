@@ -71,6 +71,20 @@
   display: none;
 }
 
+@media (max-width: 640px) {
+  .left {
+    gap: var(--spacing-2);
+  }
+
+  .right {
+    gap: 4px;
+  }
+
+  .iconBtn {
+    padding: 6px;
+  }
+}
+
 @media (min-width: 768px) {
   .location {
     display: none; /* Hide on desktop, managed elsewhere */

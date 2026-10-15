@@ -2,23 +2,34 @@
   display: flex;
   flex-direction: column;
   gap: var(--spacing-1);
-  margin-bottom: var(--spacing-4);
+  margin-bottom: var(--spacing-3);
 }
 
 .label {
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-medium);
   color: var(--color-text-primary);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.inputContainer {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
 }
 
 .input {
   width: 100%;
-  height: 44px; /* Accessible touch target */
+  height: 42px; /* Compact & accessible touch target */
   padding: 0 var(--spacing-3);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   background-color: var(--color-surface);
   color: var(--color-text-primary);
+  font-size: var(--font-size-base);
   transition: all 0.2s ease;
 }
 
@@ -41,6 +52,63 @@
   box-shadow: 0 0 0 2px var(--color-error-bg);
 }
 
+.hasLeftIcon {
+  padding-left: 38px !important;
+}
+
+.hasRightIcon {
+  padding-right: 42px !important;
+}
+
+.leftIcon {
+  position: absolute;
+  left: 12px;
+  display: flex;
+  align-items: center;
+  color: var(--color-text-muted);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.rightIcon {
+  position: absolute;
+  right: 12px;
+  display: flex;
+  align-items: center;
+  color: var(--color-text-muted);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.passwordToggleBtn {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: color 0.15s ease, background-color 0.15s ease;
+  z-index: 2;
+  padding: 0;
+}
+
+.passwordToggleBtn:hover {
+  color: var(--color-primary);
+  background-color: var(--color-surface-hover);
+}
+
+.passwordToggleBtn:focus-visible {
+  outline: 2px solid var(--color-primary);
+}
+
 .helperText {
   font-size: var(--font-size-xs);
   color: var(--color-text-secondary);
@@ -57,19 +125,20 @@
   display: flex;
   align-items: center;
   gap: var(--spacing-2);
-  margin-bottom: var(--spacing-4);
+  margin-bottom: var(--spacing-3);
   cursor: pointer;
 }
 
 .checkboxInput {
-  width: 20px;
-  height: 20px;
+  width: 18px;
+  height: 18px;
   accent-color: var(--color-primary);
   cursor: inherit;
 }
 
 .checkboxLabel {
-  font-size: var(--font-size-base);
+  font-size: var(--font-size-sm);
   color: var(--color-text-primary);
   user-select: none;
 }
+

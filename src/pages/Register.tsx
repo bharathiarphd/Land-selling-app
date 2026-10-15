@@ -25,8 +25,8 @@ export default function Register() {
     role: 'Buyer' as UserRole
   });
 
-  // First password visible by default as requested
-  const [showPin, setShowPin] = useState(true);
+  // Password masked by default for security with eye icon toggle
+  const [showPin, setShowPin] = useState(false);
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState(false);

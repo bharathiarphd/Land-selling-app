@@ -87,8 +87,32 @@
   --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
   
   /* Header and Navigation Heights */
-  --header-height: 60px;
-  --bottom-nav-height: 64px;
+  --header-height: 56px;
+  --bottom-nav-height: 60px;
+}
+
+/* Compact Mobile Design Tokens: adapts all pages automatically */
+@media (max-width: 640px) {
+  :root {
+    --header-height: 52px;
+    --bottom-nav-height: 56px;
+
+    /* Scaled compact spacing scale to eliminate empty blank spaces */
+    --spacing-4: 0.875rem;
+    --spacing-5: 1rem;
+    --spacing-6: 1.125rem;
+    --spacing-8: 1.35rem;
+    --spacing-10: 1.6rem;
+    --spacing-12: 1.85rem;
+    --spacing-16: 2.25rem;
+
+    /* Compact Typography Scale */
+    --font-size-lg: 1.05rem;
+    --font-size-xl: 1.15rem;
+    --font-size-2xl: 1.35rem;
+    --font-size-3xl: 1.5rem;
+    --font-size-4xl: 1.75rem;
+  }
 }
 
 /* Dark Mode Preparation (Inactive by default) */
