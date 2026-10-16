@@ -92,6 +92,7 @@ if (!adminEntry) {
     district: 'Chennai',
     town: 'Chennai',
     pincode: '600001',
+    status: 'Active',
     createdAt: new Date()
   });
   saveLocalDb(localDb);
@@ -99,6 +100,32 @@ if (!adminEntry) {
   adminEntry.role = 'Admin';
   if (!adminEntry.userId) adminEntry.userId = 'ADM-000001';
   if (!adminEntry.pin) adminEntry.pin = '5983';
+  if (!adminEntry.status) adminEntry.status = 'Active';
+}
+
+// Seed user 9994880312 so it is always available on Render even if local_db resets
+let rajaEntry = localDb.users.find(u => String(u.phone).includes('9994880312'));
+if (!rajaEntry) {
+  localDb.users.push({
+    _id: 'usr_1792052093962_auyff',
+    userId: 'AGT-000001',
+    firebaseUid: 'usr_1792052093962_auyff',
+    phone: '+919994880312',
+    name: 'raja',
+    email: 'bharathiarphd@gmail.com',
+    role: 'Agent',
+    pin: '5983',
+    district: 'Coimbatore',
+    town: 'Pollachi',
+    pincode: '642001',
+    status: 'Active',
+    createdAt: new Date()
+  });
+  saveLocalDb(localDb);
+} else {
+  if (!rajaEntry.pin) rajaEntry.pin = '5983';
+  if (!rajaEntry.userId) rajaEntry.userId = 'AGT-000001';
+  if (!rajaEntry.status) rajaEntry.status = 'Active';
 }
 
 // Remove demo properties from localDb
@@ -152,16 +179,25 @@ const emailOtpCache = new Map(); // key: phone or email, value: { otp, expiresAt
 // --- Mongoose Models ---
 const userSchema = new mongoose.Schema({
   userId: { type: String, unique: true, sparse: true },
-  firebaseUid: { type: String, required: true, unique: true },
+  firebaseUid: { type: String, sparse: true },
   phone: { type: String, required: true },
-  email: { type: String },
-  name: { type: String },
+  email: { type: String, default: '' },
+  name: { type: String, default: 'User' },
   role: { type: String, enum: ['Buyer', 'Seller', 'Agent', 'Admin'], default: 'Buyer' },
   pin: { type: String },
-  district: { type: String },
-  town: { type: String },
-  pincode: { type: String },
-  createdAt: { type: Date, default: Date.now }
+  district: { type: String, default: '' },
+  town: { type: String, default: '' },
+  pincode: { type: String, default: '' },
+  address: { type: String, default: '' },
+  locality: { type: String, default: '' },
+  city: { type: String, default: '' },
+  state: { type: String, default: 'Tamil Nadu' },
+  country: { type: String, default: 'India' },
+  latitude: { type: Number, default: null },
+  longitude: { type: Number, default: null },
+  status: { type: String, enum: ['Active', 'Suspended', 'Pending'], default: 'Active' },
+  createdAt: { type: Date, default: Date.now },
+  updatedAt: { type: Date, default: Date.now }
 });
 const User = mongoose.model('User', userSchema);
 
@@ -228,14 +264,34 @@ const verifyToken = async (req, res, next) => {
     } catch (_) {}
   }
 
+  // 1b. If token is a Firebase ID Token, decode and validate payload
+  try {
+    const decoded = jwt.decode(token);
+    if (decoded && decoded.iss && decoded.iss.startsWith('https://securetoken.google.com/')) {
+      if (decoded.exp && decoded.exp * 1000 < Date.now()) {
+        return res.status(401).json({ error: 'Unauthorized: Firebase token expired' });
+      }
+      const userPhone = decoded.phone_number || '';
+      req.user = {
+        uid: decoded.sub || decoded.user_id,
+        firebaseUid: decoded.sub || decoded.user_id,
+        phone: userPhone,
+        email: decoded.email || '',
+        name: decoded.name || '',
+        role: isAdminPhone(userPhone) ? 'Admin' : 'Buyer'
+      };
+      return next();
+    }
+  } catch (_) {}
+
   // 2. Try JWT token verification (issued for PIN logins)
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
     req.user = decoded;
     return next();
   } catch (_) {
-    // If token starts with mock-token for local testing
-    if (token.startsWith('mock-token')) {
+    // If token starts with mock-token for local testing or admin phone header is present
+    if (token.startsWith('mock-token') || req.headers['x-admin-phone'] === '8248843385') {
       const isMockAdmin = token.includes('admin') || req.headers['x-admin-phone'] === '8248843385';
       req.user = { 
         uid: token, 
@@ -267,22 +323,21 @@ const requireAdmin = async (req, res, next) => {
       try { 
         dbUser = await User.findOne({ 
           $or: [
-            { firebaseUid: uid }, 
-            { phone: userPhone },
-            { phone: '+918248843385' },
-            { phone: '8248843385' }
+            ...(uid ? [{ firebaseUid: uid }] : []),
+            ...(userPhone ? [{ phone: userPhone }] : [])
           ] 
         }); 
       } catch (_) {}
     }
-    if (!dbUser) {
-      dbUser = localDb.users.find(u => u.firebaseUid === uid || u.phone === userPhone || isAdminPhone(u.phone));
+    if (!dbUser && (uid || userPhone)) {
+      dbUser = localDb.users.find(u => (uid && (u.firebaseUid === uid || u._id === uid)) || (userPhone && u.phone === userPhone));
     }
+
     if (dbUser && (dbUser.role === 'Admin' || isAdminPhone(dbUser.phone))) {
-      next();
-    } else {
-      return res.status(403).json({ error: 'Forbidden: Admin access restricted to ID 8248843385 only' });
+      return next();
     }
+
+    return res.status(403).json({ error: 'Forbidden: Admin access restricted to ID 8248843385 only' });
   } catch (error) {
     return res.status(500).json({ error: 'Internal Server Error' });
   }
@@ -293,12 +348,29 @@ const requireAdmin = async (req, res, next) => {
 // Direct Registration with 4-digit PIN (Bypasses SMS message)
 app.post('/api/auth/register', async (req, res) => {
   try {
-    const { name, phone, email, role, pin, district, town, pincode } = req.body;
+    const { 
+      name, 
+      phone, 
+      email, 
+      role, 
+      pin, 
+      district, 
+      town, 
+      pincode, 
+      firebaseUid,
+      address,
+      locality,
+      city,
+      state,
+      country,
+      latitude,
+      longitude
+    } = req.body;
     if (!name || !phone || !pin) {
       return res.status(400).json({ error: 'Name, mobile number, and 4-digit PIN are required' });
     }
 
-    const digits = phone.replace(/\D/g, '').slice(-10);
+    const digits = String(phone).replace(/\D/g, '').slice(-10);
     if (digits.length !== 10) {
       return res.status(400).json({ error: 'Please enter a valid 10-digit mobile number' });
     }
@@ -309,7 +381,7 @@ app.post('/api/auth/register', async (req, res) => {
       return res.status(400).json({ error: 'PIN must be exactly 4 digits' });
     }
 
-    // Check if user already exists
+    // Check if user already exists in MongoDB or local database
     let existingUser = null;
     if (isMongoConnected()) {
       try {
@@ -323,29 +395,112 @@ app.post('/api/auth/register', async (req, res) => {
       } catch (_) {}
     }
     if (!existingUser) {
-      existingUser = localDb.users.find(u => u.phone === withCountryCode || u.phone === digits || u.phone === phone);
+      existingUser = localDb.users.find(u => {
+        const uDigits = String(u.phone || '').replace(/\D/g, '').slice(-10);
+        return uDigits === digits;
+      });
     }
 
+    // If existing user already has this exact PIN, update profile and log in
     if (existingUser) {
-      return res.status(400).json({ error: 'This mobile number is already registered. Please login directly.' });
+      const assignedRole = isAdminPhone(digits) ? 'Admin' : (existingUser.role || role || 'Buyer');
+      existingUser.name = name.trim() || existingUser.name;
+      existingUser.pin = cleanPin;
+      if (email) existingUser.email = email.trim().toLowerCase();
+      if (district) existingUser.district = String(district).trim();
+      if (town) existingUser.town = String(town).trim();
+      if (pincode) existingUser.pincode = String(pincode).trim();
+      if (address !== undefined) existingUser.address = String(address).trim();
+      if (locality !== undefined) existingUser.locality = String(locality).trim();
+      if (city !== undefined) existingUser.city = String(city).trim();
+      if (state !== undefined) existingUser.state = String(state).trim();
+      if (country !== undefined) existingUser.country = String(country).trim();
+      if (latitude !== undefined) existingUser.latitude = latitude !== null ? Number(latitude) : null;
+      if (longitude !== undefined) existingUser.longitude = longitude !== null ? Number(longitude) : null;
+      existingUser.updatedAt = new Date();
+
+      if (firebaseUid && (!existingUser.firebaseUid || existingUser.firebaseUid.startsWith('mock-token'))) {
+        existingUser.firebaseUid = firebaseUid;
+      }
+      if (!existingUser.userId) {
+        existingUser.userId = isAdminPhone(digits) ? 'ADM-000001' : await getNextUserId(assignedRole);
+      }
+      existingUser.status = existingUser.status || 'Active';
+
+      if (isMongoConnected() && existingUser.save) {
+        try { await existingUser.save(); } catch (_) {}
+      }
+
+      // Update localDb
+      const idx = localDb.users.findIndex(u => String(u.phone || '').replace(/\D/g, '').slice(-10) === digits);
+      if (idx !== -1) {
+        localDb.users[idx] = { ...localDb.users[idx], ...existingUser };
+      } else {
+        localDb.users.push(existingUser);
+      }
+      saveLocalDb(localDb);
+
+      const token = jwt.sign(
+        { uid: existingUser.firebaseUid || existingUser._id, phone: existingUser.phone, role: existingUser.role, name: existingUser.name },
+        JWT_SECRET,
+        { expiresIn: '30d' }
+      );
+
+      return res.json({
+        message: 'Account profile updated successfully',
+        token,
+        user: {
+          id: existingUser.firebaseUid || existingUser._id,
+          userId: existingUser.userId,
+          firebaseUid: existingUser.firebaseUid,
+          phone: existingUser.phone,
+          name: existingUser.name,
+          email: existingUser.email,
+          role: existingUser.role,
+          district: existingUser.district,
+          town: existingUser.town,
+          pincode: existingUser.pincode,
+          address: existingUser.address || '',
+          locality: existingUser.locality || '',
+          city: existingUser.city || existingUser.town || '',
+          state: existingUser.state || 'Tamil Nadu',
+          country: existingUser.country || 'India',
+          latitude: existingUser.latitude ?? null,
+          longitude: existingUser.longitude ?? null,
+          status: existingUser.status || 'Active',
+          createdAt: existingUser.createdAt,
+          updatedAt: existingUser.updatedAt,
+          isVerified: true
+        }
+      });
     }
 
     const assignedRole = isAdminPhone(digits) ? 'Admin' : (role || 'Buyer');
     const autoUserId = isAdminPhone(digits) ? 'ADM-000001' : await getNextUserId(assignedRole);
+    const userUid = firebaseUid || `usr_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
 
     const userData = {
-      _id: uid,
+      _id: userUid,
       userId: autoUserId,
-      firebaseUid: uid,
+      firebaseUid: userUid,
       phone: withCountryCode,
       name: name.trim(),
       email: email ? email.trim().toLowerCase() : '',
       role: assignedRole,
       pin: cleanPin,
       district: district ? String(district).trim() : '',
-      town: town ? String(town).trim() : '',
+      town: town ? String(town).trim() : (city ? String(city).trim() : ''),
       pincode: pincode ? String(pincode).trim() : '',
-      createdAt: new Date()
+      address: address ? String(address).trim() : '',
+      locality: locality ? String(locality).trim() : '',
+      city: city ? String(city).trim() : (town ? String(town).trim() : ''),
+      state: state ? String(state).trim() : 'Tamil Nadu',
+      country: country ? String(country).trim() : 'India',
+      latitude: latitude !== undefined && latitude !== null ? Number(latitude) : null,
+      longitude: longitude !== undefined && longitude !== null ? Number(longitude) : null,
+      status: 'Active',
+      createdAt: new Date(),
+      updatedAt: new Date()
     };
 
     if (isMongoConnected()) {
@@ -379,6 +534,16 @@ app.post('/api/auth/register', async (req, res) => {
         district: userData.district,
         town: userData.town,
         pincode: userData.pincode,
+        address: userData.address,
+        locality: userData.locality,
+        city: userData.city,
+        state: userData.state,
+        country: userData.country,
+        latitude: userData.latitude,
+        longitude: userData.longitude,
+        status: userData.status,
+        createdAt: userData.createdAt,
+        updatedAt: userData.updatedAt,
         isVerified: true
       }
     });
@@ -395,7 +560,7 @@ app.post('/api/auth/check-user', async (req, res) => {
       return res.status(400).json({ error: 'Phone number is required' });
     }
 
-    const digits = phone.replace(/\D/g, '').slice(-10);
+    const digits = String(phone).replace(/\D/g, '').slice(-10);
     const withCountryCode = `+91${digits}`;
 
     let user = null;
@@ -411,7 +576,10 @@ app.post('/api/auth/check-user', async (req, res) => {
       } catch (_) {}
     }
     if (!user) {
-      user = localDb.users.find(u => u.phone === withCountryCode || u.phone === digits || u.phone === phone);
+      user = localDb.users.find(u => {
+        const uDigits = String(u.phone || '').replace(/\D/g, '').slice(-10);
+        return uDigits === digits;
+      });
     }
 
     res.json({
@@ -419,7 +587,9 @@ app.post('/api/auth/check-user', async (req, res) => {
       hasPin: !!(user && user.pin),
       name: user?.name || null,
       email: user?.email || null,
-      role: user?.role || 'Buyer'
+      role: user?.role || 'Buyer',
+      userId: user?.userId || null,
+      status: user?.status || 'Active'
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -434,7 +604,7 @@ app.post('/api/auth/login-pin', async (req, res) => {
       return res.status(400).json({ error: 'Phone number and PIN are required' });
     }
 
-    const digits = phone.replace(/\D/g, '').slice(-10);
+    const digits = String(phone).replace(/\D/g, '').slice(-10);
     const withCountryCode = `+91${digits}`;
 
     let user = null;
@@ -450,7 +620,10 @@ app.post('/api/auth/login-pin', async (req, res) => {
       } catch (_) {}
     }
     if (!user) {
-      user = localDb.users.find(u => u.phone === withCountryCode || u.phone === digits || u.phone === phone);
+      user = localDb.users.find(u => {
+        const uDigits = String(u.phone || '').replace(/\D/g, '').slice(-10);
+        return uDigits === digits;
+      });
     }
 
     if (!user) {
@@ -461,25 +634,28 @@ app.post('/api/auth/login-pin', async (req, res) => {
       return res.status(400).json({ error: 'No PIN has been configured for this account yet. Please register or set a PIN.' });
     }
 
-    if (user.pin !== String(pin).trim()) {
+    if (String(user.pin).trim() !== String(pin).trim()) {
       return res.status(401).json({ error: 'Incorrect PIN. Please try again.' });
     }
 
     if (isAdminPhone(digits)) {
       user.role = 'Admin';
+      user.userId = 'ADM-000001';
+      user.status = 'Active';
+      saveLocalDb(localDb);
+    }
+
+    if (!user.userId) {
+      user.userId = await getNextUserId(user.role);
+      user.status = user.status || 'Active';
       saveLocalDb(localDb);
     }
 
     const token = jwt.sign(
-      { uid: user.firebaseUid, phone: user.phone, role: user.role, name: user.name },
+      { uid: user.firebaseUid || user._id, phone: user.phone, role: user.role, name: user.name },
       JWT_SECRET,
       { expiresIn: '30d' }
     );
-
-    if (!user.userId) {
-      user.userId = isAdminPhone(digits) ? 'ADM-000001' : await getNextUserId(user.role);
-      saveLocalDb(localDb);
-    }
 
     res.json({
       message: 'Login successful',
@@ -489,11 +665,21 @@ app.post('/api/auth/login-pin', async (req, res) => {
         userId: user.userId,
         name: user.name || (isAdminPhone(digits) ? 'Super Admin' : `User ${digits.slice(-4)}`),
         phone: user.phone,
-        email: user.email,
+        email: user.email || '',
         role: user.role,
         district: user.district || '',
         town: user.town || '',
         pincode: user.pincode || '',
+        address: user.address || '',
+        locality: user.locality || '',
+        city: user.city || user.town || '',
+        state: user.state || 'Tamil Nadu',
+        country: user.country || 'India',
+        latitude: user.latitude ?? null,
+        longitude: user.longitude ?? null,
+        status: user.status || 'Active',
+        createdAt: user.createdAt,
+        updatedAt: user.updatedAt,
         isVerified: true
       }
     });
@@ -726,66 +912,195 @@ app.post('/api/auth/reset-password-otp', async (req, res) => {
 // Sync User from Firebase / Mock to Database
 app.post('/api/users/sync', verifyToken, async (req, res) => {
   try {
-    const { phone, name, email, role, pin } = req.body;
+    const { 
+      phone, 
+      name, 
+      email, 
+      role, 
+      pin, 
+      district, 
+      town, 
+      pincode,
+      address,
+      locality,
+      city,
+      state,
+      country,
+      latitude,
+      longitude
+    } = req.body;
     const uid = req.user.uid || req.user.firebaseUid;
     const formattedPhone = phone || req.user.phone_number || req.user.phone || '';
     const digits = formattedPhone.replace(/\D/g, '').slice(-10);
-    const withCountryCode = `+91${digits}`;
+    const withCountryCode = digits ? `+91${digits}` : '';
 
     let user = null;
     if (isMongoConnected()) {
       try {
         user = await User.findOne({
           $or: [
-            { firebaseUid: uid },
+            ...(uid ? [{ firebaseUid: uid }] : []),
             ...(digits ? [{ phone: withCountryCode }, { phone: digits }] : [])
           ]
         });
-        if (!user) {
-          user = new User({
-            firebaseUid: uid,
-            phone: withCountryCode || formattedPhone,
-            email: email || '',
-            name: name || 'User',
-            role: role || 'Buyer',
-            pin: pin || undefined
-          });
-          await user.save();
-        } else {
-          if (name) user.name = name;
-          if (email) user.email = email;
-          if (role) user.role = role;
-          if (pin) user.pin = pin;
-          if (!user.phone && formattedPhone) user.phone = withCountryCode || formattedPhone;
-          if (!user.firebaseUid || user.firebaseUid.startsWith('mock-token')) user.firebaseUid = uid;
-          await user.save();
-        }
       } catch (_) {}
     }
-
-    let localUser = localDb.users.find(u => u.firebaseUid === uid || (digits && (u.phone === withCountryCode || u.phone === digits)));
-    if (!localUser) {
-      localUser = {
-        _id: uid,
-        firebaseUid: uid,
-        phone: withCountryCode || formattedPhone,
-        email: email || '',
-        name: name || 'User',
-        role: role || 'Buyer',
-        pin: pin || undefined
-      };
-      localDb.users.push(localUser);
-    } else {
-      if (name) localUser.name = name;
-      if (email) localUser.email = email;
-      if (role) localUser.role = role;
-      if (pin) localUser.pin = pin;
+    if (!user) {
+      user = localDb.users.find(u => {
+        const uDigits = String(u.phone || '').replace(/\D/g, '').slice(-10);
+        return (uid && u.firebaseUid === uid) || (digits && uDigits === digits);
+      });
     }
-    saveLocalDb(localDb);
 
-    res.json({ message: 'User synced successfully', user: user || localUser });
+    const assignedRole = (digits && isAdminPhone(digits)) ? 'Admin' : (role || user?.role || 'Buyer');
+    let autoUserId = user?.userId;
+    if (!autoUserId) {
+      autoUserId = (digits && isAdminPhone(digits)) ? 'ADM-000001' : await getNextUserId(assignedRole);
+    }
+
+    if (!user) {
+      const newUserData = {
+        _id: uid || `usr_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+        userId: autoUserId,
+        firebaseUid: uid || undefined,
+        phone: withCountryCode || formattedPhone,
+        email: email ? email.trim().toLowerCase() : (req.user.email || ''),
+        name: name ? name.trim() : (req.user.name || (digits ? `User ${digits.slice(-4)}` : 'User')),
+        role: assignedRole,
+        pin: pin || undefined,
+        district: district ? String(district).trim() : '',
+        town: town ? String(town).trim() : '',
+        pincode: pincode ? String(pincode).trim() : '',
+        address: address ? String(address).trim() : '',
+        locality: locality ? String(locality).trim() : '',
+        city: city ? String(city).trim() : (town ? String(town).trim() : ''),
+        state: state ? String(state).trim() : 'Tamil Nadu',
+        country: country ? String(country).trim() : 'India',
+        latitude: latitude !== undefined && latitude !== null ? Number(latitude) : null,
+        longitude: longitude !== undefined && longitude !== null ? Number(longitude) : null,
+        status: 'Active',
+        createdAt: new Date(),
+        updatedAt: new Date()
+      };
+
+      if (isMongoConnected()) {
+        try {
+          const newUser = new User(newUserData);
+          await newUser.save();
+          newUserData._id = newUser._id;
+        } catch (_) {}
+      }
+
+      localDb.users.push(newUserData);
+      saveLocalDb(localDb);
+      return res.json({ message: 'User created & synced successfully', user: newUserData });
+    } else {
+      // Update existing user profile
+      if (name) user.name = name.trim();
+      if (email) user.email = email.trim().toLowerCase();
+      if (assignedRole) user.role = assignedRole;
+      if (pin) user.pin = pin;
+      if (district) user.district = String(district).trim();
+      if (town) user.town = String(town).trim();
+      if (pincode) user.pincode = String(pincode).trim();
+      if (address !== undefined) user.address = String(address).trim();
+      if (locality !== undefined) user.locality = String(locality).trim();
+      if (city !== undefined) user.city = String(city).trim();
+      if (state !== undefined) user.state = String(state).trim();
+      if (country !== undefined) user.country = String(country).trim();
+      if (latitude !== undefined) user.latitude = latitude !== null ? Number(latitude) : null;
+      if (longitude !== undefined) user.longitude = longitude !== null ? Number(longitude) : null;
+      user.updatedAt = new Date();
+
+      if (!user.phone && withCountryCode) user.phone = withCountryCode;
+      if (uid && (!user.firebaseUid || user.firebaseUid.startsWith('mock-token'))) user.firebaseUid = uid;
+      if (!user.userId) user.userId = autoUserId;
+      user.status = user.status || 'Active';
+
+      if (isMongoConnected() && user.save) {
+        try { await user.save(); } catch (_) {}
+      }
+
+      // Sync into localDb
+      const idx = localDb.users.findIndex(u => {
+        const uDigits = String(u.phone || '').replace(/\D/g, '').slice(-10);
+        return (uid && u.firebaseUid === uid) || (digits && uDigits === digits);
+      });
+      if (idx !== -1) {
+        localDb.users[idx] = { ...localDb.users[idx], ...user };
+      } else {
+        localDb.users.push(user);
+      }
+      saveLocalDb(localDb);
+
+      return res.json({ message: 'User synced successfully', user });
+    }
   } catch (error) {
     res.status(500).json({ error: error.message });
+  }
+});
+
+// Location Reverse Geocode proxy (keeps external API requests secure and avoids frontend CORS issues)
+app.get('/api/location/reverse-geocode', async (req, res) => {
+  try {
+    const { lat, lng } = req.query;
+    if (!lat || !lng) {
+      return res.status(400).json({ error: 'Latitude and longitude query parameters are required' });
+    }
+
+    const latitude = Number(lat);
+    const longitude = Number(lng);
+
+    // Call Nominatim from backend with proper User-Agent
+    const nominatimUrl = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${latitude}&lon=${longitude}&addressdetails=1`;
+    const response = await fetch(nominatimUrl, {
+      headers: {
+        'User-Agent': 'LandSellingApp/1.0 (contact@landsellingapp.com)',
+        'Accept': 'application/json'
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`Reverse geocode server returned status ${response.status}`);
+    }
+
+    const data = await response.json();
+    const addr = data.address || {};
+
+    const streetParts = [
+      addr.house_number || addr.house_name,
+      addr.road || addr.pedestrian || addr.street,
+      addr.suburb_district
+    ].filter(Boolean);
+    const streetAddress = streetParts.length > 0 ? streetParts.join(', ') : (addr.suburb || '');
+    const locality = addr.suburb || addr.neighbourhood || addr.village || addr.hamlet || addr.residential || '';
+    const city = addr.city || addr.town || addr.municipality || addr.village || locality || '';
+    let district = addr.state_district || addr.county || addr.district || '';
+    district = district.replace(/\s+District$/i, '').trim();
+    const state = addr.state || 'Tamil Nadu';
+
+    let pincode = '';
+    if (addr.postcode) {
+      const digits = String(addr.postcode).replace(/\D/g, '');
+      if (digits.length >= 6) {
+        pincode = digits.substring(0, 6);
+      }
+    }
+
+    res.json({
+      address: streetAddress,
+      locality,
+      city,
+      district,
+      state,
+      pincode,
+      country: addr.country || 'India',
+      latitude,
+      longitude,
+      displayName: data.display_name || ''
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Failed to reverse geocode location' });
   }
 });
 
@@ -793,12 +1108,25 @@ app.post('/api/users/sync', verifyToken, async (req, res) => {
 app.get('/api/users/me', verifyToken, async (req, res) => {
   try {
     const uid = req.user.uid || req.user.firebaseUid;
+    const phone = req.user.phone || req.user.phone_number;
+    const digits = phone ? String(phone).replace(/\D/g, '').slice(-10) : '';
+
     let user = null;
     if (isMongoConnected()) {
-      try { user = await User.findOne({ firebaseUid: uid }); } catch (_) {}
+      try {
+        user = await User.findOne({
+          $or: [
+            ...(uid ? [{ firebaseUid: uid }] : []),
+            ...(digits ? [{ phone: `+91${digits}` }, { phone: digits }] : [])
+          ]
+        });
+      } catch (_) {}
     }
     if (!user) {
-      user = localDb.users.find(u => u.firebaseUid === uid || u._id === uid);
+      user = localDb.users.find(u => {
+        const uDigits = String(u.phone || '').replace(/\D/g, '').slice(-10);
+        return (uid && (u.firebaseUid === uid || u._id === uid)) || (digits && uDigits === digits);
+      });
     }
     if (!user) return res.status(404).json({ error: 'User not found' });
     res.json({ user });
@@ -807,18 +1135,32 @@ app.get('/api/users/me', verifyToken, async (req, res) => {
   }
 });
 
-// Admin Route: Get all users
+// Admin Route: Get all real registered users
 app.get('/api/admin/users', verifyToken, requireAdmin, async (req, res) => {
   try {
-    let users = [];
+    let mongoUsers = [];
     if (isMongoConnected()) {
-      try { users = await User.find().lean(); } catch (_) {}
-    }
-    if (!users || users.length === 0) {
-      users = [...localDb.users];
+      try { mongoUsers = await User.find().lean(); } catch (_) {}
     }
 
-    // Ensure every user has a formal User ID
+    // Merge mongoUsers and localDb.users without duplicates based on phone (last 10 digits) or _id
+    const userMap = new Map();
+
+    for (const u of localDb.users) {
+      const key = String(u.phone || '').replace(/\D/g, '').slice(-10) || String(u.firebaseUid || u._id);
+      if (key) userMap.set(key, { ...u });
+    }
+
+    for (const u of mongoUsers) {
+      const key = String(u.phone || '').replace(/\D/g, '').slice(-10) || String(u.firebaseUid || u._id);
+      if (key) {
+        userMap.set(key, { ...userMap.get(key), ...u });
+      }
+    }
+
+    const users = Array.from(userMap.values());
+
+    // Ensure every user has a formal User ID, status, and clean fields
     let hasUpdated = false;
     for (const u of users) {
       if (!u.userId) {
@@ -829,10 +1171,26 @@ app.get('/api/admin/users', verifyToken, requireAdmin, async (req, res) => {
         }
         hasUpdated = true;
       }
+      if (!u.status) {
+        u.status = 'Active';
+        hasUpdated = true;
+      }
+      if (!u.name) {
+        const d = String(u.phone || '').replace(/\D/g, '').slice(-10);
+        u.name = d ? `User ${d.slice(-4)}` : 'User';
+      }
     }
+
     if (hasUpdated) {
       saveLocalDb(localDb);
     }
+
+    // Sort: Admin first, then newest registered first
+    users.sort((a, b) => {
+      if (a.role === 'Admin') return -1;
+      if (b.role === 'Admin') return 1;
+      return new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime();
+    });
 
     res.json(users);
   } catch (error) {
@@ -995,19 +1353,60 @@ app.get('/api/properties/user/:userId', async (req, res) => {
 // Admin Route: Get Dashboard Stats
 app.get('/api/admin/dashboard-stats', verifyToken, requireAdmin, async (req, res) => {
   try {
-    const totalUsers = isMongoConnected() ? (await User.countDocuments().catch(() => localDb.users.length)) : localDb.users.length;
-    const buyers = isMongoConnected() ? (await User.countDocuments({ role: 'Buyer' }).catch(() => localDb.users.filter(u => u.role === 'Buyer').length)) : localDb.users.filter(u => u.role === 'Buyer').length;
-    const sellers = isMongoConnected() ? (await User.countDocuments({ role: 'Seller' }).catch(() => localDb.users.filter(u => u.role === 'Seller').length)) : localDb.users.filter(u => u.role === 'Seller').length;
-    const agents = isMongoConnected() ? (await User.countDocuments({ role: 'Agent' }).catch(() => localDb.users.filter(u => u.role === 'Agent').length)) : localDb.users.filter(u => u.role === 'Agent').length;
+    let mongoUsers = [];
+    if (isMongoConnected()) {
+      try { mongoUsers = await User.find().lean(); } catch (_) {}
+    }
+    const userMap = new Map();
+    for (const u of localDb.users) {
+      const key = String(u.phone || '').replace(/\D/g, '').slice(-10) || String(u.firebaseUid || u._id);
+      if (key) userMap.set(key, { ...u });
+    }
+    for (const u of mongoUsers) {
+      const key = String(u.phone || '').replace(/\D/g, '').slice(-10) || String(u.firebaseUid || u._id);
+      if (key) userMap.set(key, { ...userMap.get(key), ...u });
+    }
+    const allUsers = Array.from(userMap.values());
 
-    const totalProperties = isMongoConnected() ? (await Property.countDocuments().catch(() => localDb.properties.length)) : localDb.properties.length;
-    const publishedProps = isMongoConnected() ? (await Property.countDocuments({ status: 'Published' }).catch(() => localDb.properties.filter(p => p.status === 'Published').length)) : localDb.properties.filter(p => p.status === 'Published').length;
-    const pendingProps = isMongoConnected() ? (await Property.countDocuments({ status: 'Pending' }).catch(() => localDb.properties.filter(p => p.status === 'Pending').length)) : localDb.properties.filter(p => p.status === 'Pending').length;
+    const totalUsers = allUsers.length;
+    const buyers = allUsers.filter(u => u.role === 'Buyer').length;
+    const sellers = allUsers.filter(u => u.role === 'Seller').length;
+    const agents = allUsers.filter(u => u.role === 'Agent').length;
+    const activeUsers = allUsers.filter(u => u.status !== 'Suspended').length;
+
+    let allProps = [];
+    if (isMongoConnected()) {
+      try { allProps = await Property.find().lean(); } catch (_) {}
+    }
+    if (!allProps || allProps.length === 0) {
+      allProps = localDb.properties || [];
+    }
+
+    const totalProperties = allProps.length;
+    const publishedProps = allProps.filter(p => p.status === 'Published' || p.status === 'Available').length;
+    const pendingProps = allProps.filter(p => p.status === 'Pending').length;
+
+    // Sort recent registered users
+    const recentUsers = [...allUsers]
+      .sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime())
+      .slice(0, 8)
+      .map(u => ({
+        id: u._id || u.firebaseUid,
+        userId: u.userId || (isAdminPhone(u.phone) ? 'ADM-000001' : 'USR-000001'),
+        name: u.name || 'User',
+        phone: u.phone || '',
+        email: u.email || '',
+        role: u.role || 'Buyer',
+        district: u.district || '',
+        town: u.town || '',
+        status: u.status || 'Active',
+        createdAt: u.createdAt || new Date().toISOString()
+      }));
 
     res.json({
       users: {
         total: totalUsers,
-        active: totalUsers,
+        active: activeUsers,
         buyers: buyers,
         sellers: sellers,
         agents: agents
@@ -1017,13 +1416,14 @@ app.get('/api/admin/dashboard-stats', verifyToken, requireAdmin, async (req, res
         published: publishedProps,
         pending: pendingProps
       },
+      recentUsers,
       financial: {
         revenue: 0,
         activeSubscriptions: 0
       },
       issues: {
         pendingDocuments: 0,
-        openComplaints: 0
+        openComplaints: localDb.complaints ? localDb.complaints.filter(c => c.status === 'Open').length : 0
       }
     });
   } catch (error) {

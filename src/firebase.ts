@@ -1,9 +1,10 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
-import { getAnalytics } from "firebase/analytics";
+import { getAnalytics, isSupported } from "firebase/analytics";
+import { getFirestore } from 'firebase/firestore';
 
 // Your web app's Firebase configuration
-// These should be populated with your actual Firebase project config in .env file
+// These are populated with your actual Firebase project config in .env file
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyPlaceholderKey",
   authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "placeholder-app.firebaseapp.com",
@@ -15,6 +16,17 @@ const firebaseConfig = {
 };
 
 // Initialize Firebase
-const app = initializeApp(firebaseConfig);
+export const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
-export const analytics = getAnalytics(app);
+export const db = getFirestore(app);
+
+// Initialize analytics safely if supported in current browser environment
+export let analytics: any = null;
+if (typeof window !== 'undefined') {
+  isSupported().then(supported => {
+    if (supported) {
+      analytics = getAnalytics(app);
+    }
+  }).catch(() => {});
+}
+

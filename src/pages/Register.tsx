@@ -1,11 +1,23 @@
 import { useState } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
-import { MapPin, Eye, EyeOff } from 'lucide-react';
+import { 
+  MapPin, 
+  Eye, 
+  EyeOff, 
+  Navigation, 
+  CheckCircle2, 
+  AlertCircle, 
+  Loader2, 
+  Building2, 
+  Home as HomeIcon,
+  Compass
+} from 'lucide-react';
 import { Input } from '../components/Input';
 import { Button } from '../components/Button';
 import { Select } from '../components/Select';
 import { Checkbox } from '../components/Checkbox';
 import { authService, type UserRole, type RegisterData } from '../services/authService';
+import { locationService, validateIndianPincode } from '../services/locationService';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { saveCredentials } from '../utils/adminAuth';
@@ -67,20 +79,109 @@ export default function Register() {
     email: '',
     pin: '',
     role: 'Buyer' as UserRole,
-    district: '',
-    town: '',
-    pincode: ''
+    // Automatic and manual location fields
+    address: '',       // House / Street Address
+    locality: '',      // Local Area / Village
+    city: '',          // City / Town
+    town: '',          // Town alias for compatibility
+    district: '',      // District
+    state: 'Tamil Nadu', // State (default Tamil Nadu)
+    pincode: '',       // 6-digit PIN code
+    country: 'India',  // Country (default India)
+    latitude: null as number | null,
+    longitude: null as number | null
   });
 
-  // Password masked by default for security with eye icon toggle
+  // UI States
   const [showPin, setShowPin] = useState(false);
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState(false);
 
+  // Automatic Location Detection State
+  const [isDetectingLocation, setIsDetectingLocation] = useState(false);
+  const [locationNotice, setLocationNotice] = useState<{ type: 'success' | 'info' | 'error'; message: string } | null>(null);
+
   const validatePhone = (p: string) => /^[6-9]\d{9}$/.test(p);
   const validateEmail = (e: string) => /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(e.trim());
-  const validatePincode = (pin: string) => /^\d{6}$/.test(pin.trim());
+
+  // Automatic Location Detection Trigger
+  const handleAllowLocationAccess = async () => {
+    setIsDetectingLocation(true);
+    setLocationNotice(null);
+
+    try {
+      const result = await locationService.detectAndGeocode();
+
+      if (result.success && result.data) {
+        const data = result.data;
+
+        // Smart district matching against DISTRICT_OPTIONS
+        let matchedDistrict = data.district || '';
+        const foundOption = DISTRICT_OPTIONS.find(opt => {
+          if (!opt.value) return false;
+          const optVal = opt.value.toLowerCase();
+          const dist = (data.district || '').toLowerCase();
+          const cityName = (data.city || '').toLowerCase();
+          return optVal === dist || opt.label.toLowerCase().includes(dist) || optVal === cityName;
+        });
+
+        if (foundOption) {
+          matchedDistrict = foundOption.value;
+        } else if (!matchedDistrict) {
+          matchedDistrict = 'Other';
+        }
+
+        setFormData(prev => ({
+          ...prev,
+          address: data.address || prev.address,
+          locality: data.locality || prev.locality,
+          city: data.city || data.locality || prev.city,
+          town: data.city || data.locality || prev.town,
+          district: matchedDistrict || prev.district,
+          state: data.state || prev.state || 'Tamil Nadu',
+          pincode: data.pincode || prev.pincode,
+          country: data.country || 'India',
+          latitude: data.latitude,
+          longitude: data.longitude
+        }));
+
+        setErrors(prev => ({
+          ...prev,
+          address: '',
+          locality: '',
+          town: '',
+          city: '',
+          district: '',
+          pincode: '',
+          location: ''
+        }));
+
+        setLocationNotice({
+          type: 'success',
+          message: language === 'ta'
+            ? `இருப்பிடம் வெற்றிகரமாக கண்டறியப்பட்டது (${matchedDistrict || data.city}, PIN: ${data.pincode || 'கண்டறியப்பட்டது'})! விவரங்களை சரிபார்த்து உறுதிசெய்யவும்.`
+            : `Location detected successfully (${matchedDistrict || data.city || 'Coordinates saved'}, PIN: ${data.pincode || 'Auto-filled'})! Please verify and edit your details below.`
+        });
+      } else {
+        setLocationNotice({
+          type: 'error',
+          message: result.error || (language === 'ta'
+            ? 'இருப்பிடத்தை தானாக பெற முடியவில்லை. கீழே உள்ள முகவரி படிவத்தை கைமுறையாக நிரப்பவும்.'
+            : 'Unable to detect location automatically. You can enter your address details manually below.')
+        });
+      }
+    } catch (err: any) {
+      setLocationNotice({
+        type: 'error',
+        message: err.message || (language === 'ta'
+          ? 'இருப்பிட அனுமதி நிராகரிக்கப்பட்டது அல்லது பிழை ஏற்பட்டது. முகவரியை நேரடியாக உள்ளிடவும்.'
+          : 'Location access was denied or failed. You can enter your address details manually below.')
+      });
+    } finally {
+      setIsDetectingLocation(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -106,14 +207,15 @@ export default function Register() {
       newErrors.district = language === 'ta' ? 'தயவுசெய்து உங்கள் மாவட்டத்தைத் தேர்ந்தெடுக்கவும்' : 'Please select your district';
     }
 
-    if (!formData.town.trim()) {
-      newErrors.town = language === 'ta' ? 'தயவுசெய்து உங்கள் உள்ளூர் நகரம் / கிராமத்தை உள்ளிடவும்' : 'Please enter your local town/village';
+    const cityOrTown = formData.city.trim() || formData.town.trim();
+    if (!cityOrTown) {
+      newErrors.city = language === 'ta' ? 'தயவுசெய்து உங்கள் நகரம் / கிராமத்தை உள்ளிடவும்' : 'Please enter your City / Town';
     }
 
     if (!formData.pincode.trim()) {
       newErrors.pincode = language === 'ta' ? 'அஞ்சல் குறியீட்டு எண் (PIN Code) அவசியம்' : 'Postal PIN code is required';
-    } else if (!validatePincode(formData.pincode)) {
-      newErrors.pincode = language === 'ta' ? 'சரியான 6-இலக்க அஞ்சல் குறியீட்டை உள்ளிடவும்' : 'Please enter a valid 6-digit postal PIN code';
+    } else if (!validateIndianPincode(formData.pincode)) {
+      newErrors.pincode = language === 'ta' ? 'சரியான 6-இலக்க அஞ்சல் குறியீட்டை உள்ளிடவும் (எ.கா. 641001)' : 'Please enter a valid 6-digit Indian postal PIN code (e.g. 641001)';
     }
 
     if (!formData.pin) {
@@ -146,7 +248,7 @@ export default function Register() {
         return;
       }
 
-      // 2. Prepare registration data with own 4-digit PIN and location details
+      // 2. Prepare full registration payload with confirmed location & address fields
       const registrationPayload: RegisterData = {
         name: formData.name.trim(),
         phone: formData.phone.trim(),
@@ -154,14 +256,21 @@ export default function Register() {
         role: formData.role,
         pin: formData.pin.trim(),
         district: formData.district.trim(),
-        town: formData.town.trim(),
-        pincode: formData.pincode.trim()
+        town: cityOrTown,
+        city: cityOrTown,
+        locality: formData.locality.trim(),
+        address: formData.address.trim(),
+        state: formData.state.trim() || 'Tamil Nadu',
+        pincode: formData.pincode.trim(),
+        country: formData.country.trim() || 'India',
+        latitude: formData.latitude,
+        longitude: formData.longitude
       };
 
-      // 3. Direct registration (message/SMS send stopped temporarily)
+      // 3. Register user with Firebase Authentication and save to Cloud Firestore + Backend
       const { user } = await authService.registerDirect(registrationPayload);
 
-      // 4. Save login ID and PIN password for easy auto-login
+      // 4. Save login ID and PIN password for auto-login
       saveCredentials({
         option: 'pin',
         phone: formData.phone.trim(),
@@ -170,7 +279,7 @@ export default function Register() {
         remember: true
       });
 
-      // 5. Log in immediately and navigate
+      // 5. Update user session context and navigate
       login(user);
       const state = location.state as { from?: { pathname: string } };
       navigate(state?.from?.pathname || '/', { replace: true });
@@ -197,6 +306,7 @@ export default function Register() {
       <div className={styles.formCard}>
         <form onSubmit={handleSubmit}>
 
+          {/* Full Name */}
           <div style={{ marginBottom: 'var(--spacing-4)' }}>
             <Input
               label={t('auth.name')}
@@ -207,6 +317,7 @@ export default function Register() {
             />
           </div>
 
+          {/* Mobile Number */}
           <label style={{ display: 'block', marginBottom: 'var(--spacing-2)', fontWeight: 'var(--font-weight-medium)' }}>
             {t('auth.mobileNumber')} *
           </label>
@@ -230,7 +341,8 @@ export default function Register() {
             </div>
           </div>
 
-          <div style={{ marginBottom: 'var(--spacing-4)' }}>
+          {/* Email Address */}
+          <div style={{ marginBottom: 'var(--spacing-5)' }}>
             <Input
               label={language === 'ta' ? 'மின்னஞ்சல் முகவரி *' : 'Email Address *'}
               type="email"
@@ -241,52 +353,208 @@ export default function Register() {
             />
           </div>
 
-          {/* District Selection */}
-          <div style={{ marginBottom: 'var(--spacing-4)' }}>
-            <Select
-              label={language === 'ta' ? 'மாவட்டம் (District) *' : 'District *'}
-              value={formData.district}
-              onChange={e => {
-                setFormData({ ...formData, district: e.target.value });
-                setErrors({ ...errors, district: '' });
+          {/* ============================================================ */}
+          {/* AUTOMATIC LOCATION DETECTION CARD                            */}
+          {/* ============================================================ */}
+          <div style={{
+            padding: '1rem',
+            marginBottom: 'var(--spacing-5)',
+            borderRadius: '12px',
+            backgroundColor: 'rgba(2, 132, 199, 0.05)',
+            border: '1.5px dashed #0284c7',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '0.75rem'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '0.5rem' }}>
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 600, color: '#0369a1', fontSize: '0.95rem' }}>
+                  <Navigation size={18} />
+                  <span>{language === 'ta' ? 'தானியங்கி இருப்பிடம் கண்டறிதல்' : 'Automatic Location Detection'}</span>
+                </div>
+                <p style={{ margin: '4px 0 0', fontSize: '0.8rem', color: 'var(--color-text-secondary, #64748b)', lineHeight: '1.4' }}>
+                  {language === 'ta' 
+                    ? 'GPS மூலம் உங்கள் தெரு முகவரி, ஊர், மாவட்டம் மற்றும் PIN குறியீட்டை தானாக பெறவும்.' 
+                    : 'Automatically detect and populate your street address, village, district, state & PIN code.'}
+                </p>
+              </div>
+
+              {formData.latitude !== null && (
+                <span style={{
+                  fontSize: '11px',
+                  backgroundColor: '#dcfce7',
+                  color: '#15803d',
+                  padding: '3px 8px',
+                  borderRadius: '12px',
+                  fontWeight: 600,
+                  whiteSpace: 'nowrap',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '4px'
+                }}>
+                  <CheckCircle2 size={12} />
+                  GPS OK
+                </span>
+              )}
+            </div>
+
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleAllowLocationAccess}
+              disabled={isDetectingLocation}
+              style={{
+                width: '100%',
+                borderColor: '#0284c7',
+                color: '#0284c7',
+                backgroundColor: '#ffffff',
+                fontWeight: 600,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px',
+                padding: '0.65rem 1rem'
               }}
-              options={DISTRICT_OPTIONS}
-              error={errors.district}
+            >
+              {isDetectingLocation ? (
+                <>
+                  <Loader2 size={18} className="spin" style={{ animation: 'spin 1s linear infinite' }} />
+                  <span>{language === 'ta' ? 'இருப்பிடம் கண்டறியப்படுகிறது...' : 'Detecting GPS Location...'}</span>
+                </>
+              ) : (
+                <>
+                  <Compass size={18} />
+                  <span>{language === 'ta' ? 'இருப்பிட அனுமதி வழங்கவும் (Allow Location Access)' : 'Allow Location Access'}</span>
+                </>
+              )}
+            </Button>
+
+            {/* Location Notice Banner */}
+            {locationNotice && (
+              <div style={{
+                padding: '0.6rem 0.75rem',
+                borderRadius: '8px',
+                fontSize: '0.82rem',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                backgroundColor: locationNotice.type === 'success' ? '#f0fdf4' : '#fff7ed',
+                color: locationNotice.type === 'success' ? '#166534' : '#c2410c',
+                border: `1px solid ${locationNotice.type === 'success' ? '#bbf7d0' : '#ffedd5'}`
+              }}>
+                {locationNotice.type === 'success' ? <CheckCircle2 size={16} /> : <AlertCircle size={16} />}
+                <span style={{ flex: 1 }}>{locationNotice.message}</span>
+              </div>
+            )}
+
+            {formData.latitude !== null && formData.longitude !== null && (
+              <div style={{ fontSize: '11px', color: '#64748b', display: 'flex', justifyContent: 'space-between' }}>
+                <span>📍 Lat: {formData.latitude.toFixed(5)}</span>
+                <span>Long: {formData.longitude.toFixed(5)}</span>
+              </div>
+            )}
+          </div>
+
+          {/* ============================================================ */}
+          {/* VERIFIABLE & EDITABLE ADDRESS FIELDS                         */}
+          {/* ============================================================ */}
+
+          {/* 1. House / Street Address */}
+          <div style={{ marginBottom: 'var(--spacing-4)' }}>
+            <Input
+              label={language === 'ta' ? 'வீட்டு எண் / தெரு முகவரி' : 'House / Street Address'}
+              placeholder={language === 'ta' ? 'எ.கா. கதவு எண் 12, காந்தி வீதி' : 'e.g. Door No. 12, Gandhi Street, Cross Cut Road'}
+              value={formData.address}
+              onChange={e => {
+                setFormData({ ...formData, address: e.target.value });
+                setErrors({ ...errors, address: '' });
+              }}
+              error={errors.address}
             />
           </div>
 
-          {/* Local Town and Postal PIN Code */}
+          {/* 2. Local Area / Village */}
+          <div style={{ marginBottom: 'var(--spacing-4)' }}>
+            <Input
+              label={language === 'ta' ? 'உள்ளூர் பகுதி / கிராமம்' : 'Local Area / Village'}
+              placeholder={language === 'ta' ? 'எ.கா. காந்திபுரம் / ஆழியார்' : 'e.g. Gandhipuram, Aliyar, Sulur'}
+              value={formData.locality}
+              onChange={e => {
+                setFormData({ ...formData, locality: e.target.value });
+                setErrors({ ...errors, locality: '' });
+              }}
+              error={errors.locality}
+            />
+          </div>
+
+          {/* 3. City / Town and District */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: 'var(--spacing-4)' }}>
             <div>
               <Input
-                label={language === 'ta' ? 'உள்ளூர் நகரம் / கிராமம் *' : 'Local Town / Village *'}
-                placeholder={language === 'ta' ? 'எ.கா. பொள்ளாச்சி / Sulur' : 'e.g. Pollachi, Sulur'}
-                value={formData.town}
+                label={language === 'ta' ? 'நகரம் / பேரூராட்சி *' : 'City / Town *'}
+                placeholder={language === 'ta' ? 'எ.கா. பொள்ளாச்சி / கோவை' : 'e.g. Pollachi, Coimbatore'}
+                value={formData.city || formData.town}
                 onChange={e => {
-                  setFormData({ ...formData, town: e.target.value });
-                  setErrors({ ...errors, town: '' });
+                  setFormData({ ...formData, city: e.target.value, town: e.target.value });
+                  setErrors({ ...errors, city: '' });
                 }}
-                error={errors.town}
+                error={errors.city}
               />
             </div>
+
             <div>
-              <Input
-                label={language === 'ta' ? 'அஞ்சல் குறியீடு (PIN) *' : 'Postal PIN Code *'}
-                type="tel"
-                placeholder="641001"
-                maxLength={6}
-                value={formData.pincode}
+              <Select
+                label={language === 'ta' ? 'மாவட்டம் (District) *' : 'District *'}
+                value={formData.district}
                 onChange={e => {
-                  const val = e.target.value.replace(/\D/g, '').substring(0, 6);
-                  setFormData({ ...formData, pincode: val });
-                  setErrors({ ...errors, pincode: '' });
+                  setFormData({ ...formData, district: e.target.value });
+                  setErrors({ ...errors, district: '' });
                 }}
-                error={errors.pincode}
+                options={DISTRICT_OPTIONS}
+                error={errors.district}
               />
             </div>
           </div>
 
-          {/* 4-digit Password / PIN - Visible first password, no second confirm password */}
+          {/* 4. State & Country */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: 'var(--spacing-4)' }}>
+            <div>
+              <Input
+                label={language === 'ta' ? 'மாநிலம் (State)' : 'State'}
+                value={formData.state}
+                onChange={e => setFormData({ ...formData, state: e.target.value })}
+                placeholder="Tamil Nadu"
+              />
+            </div>
+            <div>
+              <Input
+                label={language === 'ta' ? 'நாடு (Country)' : 'Country'}
+                value={formData.country}
+                onChange={e => setFormData({ ...formData, country: e.target.value })}
+                placeholder="India"
+              />
+            </div>
+          </div>
+
+          {/* 5. Postal PIN Code */}
+          <div style={{ marginBottom: 'var(--spacing-4)' }}>
+            <Input
+              label={language === 'ta' ? 'அஞ்சல் குறியீடு (PIN Code) *' : 'Postal PIN Code *'}
+              type="tel"
+              placeholder="641001"
+              maxLength={6}
+              value={formData.pincode}
+              onChange={e => {
+                const val = e.target.value.replace(/\D/g, '').substring(0, 6);
+                setFormData({ ...formData, pincode: val });
+                setErrors({ ...errors, pincode: '' });
+              }}
+              error={errors.pincode}
+              helperText={language === 'ta' ? '6-இலக்க இந்திய அஞ்சல் குறியீட்டு எண்' : 'Valid 6-digit Indian postal code'}
+            />
+          </div>
+
+          {/* 4-digit Password / PIN */}
           <div style={{ marginBottom: 'var(--spacing-4)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--spacing-1)' }}>
               <label style={{ fontWeight: 'var(--font-weight-medium)', fontSize: '0.9rem' }}>
@@ -332,6 +600,7 @@ export default function Register() {
             />
           </div>
 
+          {/* User Type / Role */}
           <div style={{ marginBottom: 'var(--spacing-4)' }}>
             <Select
               label={t('auth.userType')}
@@ -345,6 +614,7 @@ export default function Register() {
             />
           </div>
 
+          {/* Terms & Privacy */}
           <div style={{ marginBottom: 'var(--spacing-6)' }}>
             <Checkbox
               label={

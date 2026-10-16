@@ -184,21 +184,23 @@ export default function AdminUsers() {
                 <th>Email</th>
                 <th>District / Town</th>
                 <th>Role</th>
-                <th>Registered</th>
+                <th>Registration Date</th>
+                <th>Account Status</th>
                 <th>Actions</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={8} style={{ textAlign: 'center', padding: '1.5rem' }}>Loading users...</td></tr>
+                <tr><td colSpan={9} style={{ textAlign: 'center', padding: '1.5rem' }}>Loading users...</td></tr>
               ) : filteredUsers.length === 0 ? (
-                <tr><td colSpan={8} style={{ textAlign: 'center', padding: '1.5rem' }}>No users matching your search</td></tr>
+                <tr><td colSpan={9} style={{ textAlign: 'center', padding: '1.5rem' }}>No users matching your search</td></tr>
               ) : (
                 filteredUsers.map(user => {
                   const role = user.role || 'Buyer';
                   const prefix = role === 'Admin' ? 'ADM' : role === 'Seller' ? 'SLR' : role === 'Agent' ? 'AGT' : 'USR';
                   const displayUserId = user.userId || (user.phone?.includes('8248843385') ? 'ADM-000001' : `${prefix}-000001`);
                   const isCopied = copiedId === displayUserId;
+                  const isSuspended = user.status === 'Suspended';
 
                   return (
                     <tr key={user._id || displayUserId}>
@@ -270,7 +272,30 @@ export default function AdminUsers() {
                         </span>
                       </td>
 
-                      <td>{user.createdAt ? new Date(user.createdAt).toLocaleDateString() : 'Recent'}</td>
+                      <td>{user.createdAt ? new Date(user.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : 'Recent'}</td>
+
+                      <td>
+                        <span style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          padding: '4px 10px',
+                          borderRadius: '999px',
+                          fontSize: '0.75rem',
+                          fontWeight: 600,
+                          backgroundColor: isSuspended ? '#fee2e2' : '#dcfce7',
+                          color: isSuspended ? '#dc2626' : '#15803d',
+                          border: `1px solid ${isSuspended ? '#fca5a5' : '#86efac'}`
+                        }}>
+                          <span style={{
+                            width: '6px',
+                            height: '6px',
+                            borderRadius: '50%',
+                            backgroundColor: isSuspended ? '#dc2626' : '#16a34a'
+                          }} />
+                          {user.status || 'Active'}
+                        </span>
+                      </td>
 
                       <td>
                         <button 

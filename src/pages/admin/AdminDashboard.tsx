@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { 
   Users, Home, IndianRupee, ShieldAlert, FileText, CheckCircle, 
-  TrendingUp, TrendingDown, Plus, Eye, Download, FileSpreadsheet, MapPin, Clock
+  TrendingUp, TrendingDown, Plus, Eye, Download, FileSpreadsheet, MapPin, Clock,
+  Copy, Check, ExternalLink
 } from 'lucide-react';
 import { 
   AreaChart, Area, LineChart, Line, XAxis, YAxis, CartesianGrid, 
@@ -14,10 +16,22 @@ export default function AdminDashboard() {
   const [timeFilter, setTimeFilter] = useState('30 Days');
   const [revenueFilter, setRevenueFilter] = useState('Monthly');
   const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [registeredUsers, setRegisteredUsers] = useState<any[]>([]);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  const handleCopy = (id: string) => {
+    if (!id) return;
+    navigator.clipboard.writeText(id);
+    setCopiedId(id);
+    setTimeout(() => setCopiedId(null), 2000);
+  };
 
   useEffect(() => {
     adminService.getDashboardStats().then(data => {
       setStats(data);
+    });
+    adminService.getRegisteredUsers().then(users => {
+      setRegisteredUsers(users);
     });
   }, []);
 
@@ -382,6 +396,147 @@ export default function AdminDashboard() {
           </div>
         </Card>
       </div>
+
+      {/* Real Registered Users Section */}
+      <Card style={{ padding: 0, overflow: 'hidden' }}>
+        <div style={{ padding: '20px 24px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+          <div>
+            <h2 style={{ fontSize: '1.15rem', fontWeight: '700', color: '#0f172a', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Users size={20} color="#0284c7" />
+              <span>Real Registered Users (நேரலை பயனர்கள்)</span>
+            </h2>
+            <p style={{ color: '#64748b', fontSize: '0.85rem', margin: '4px 0 0 0' }}>
+              All registered users from live database with name, mobile number, registration date, and account status
+            </p>
+          </div>
+          <Link 
+            to="/admin/users" 
+            style={{ 
+              display: 'inline-flex', alignItems: 'center', gap: '6px', 
+              color: '#0284c7', fontSize: '0.85rem', fontWeight: '600', textDecoration: 'none',
+              padding: '8px 16px', borderRadius: '8px', border: '1px solid #bae6fd', backgroundColor: '#f0f9ff',
+              transition: 'all 0.15s ease'
+            }}
+          >
+            <span>Manage All Users</span>
+            <ExternalLink size={14} />
+          </Link>
+        </div>
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+            <thead>
+              <tr style={{ backgroundColor: '#f8fafc', color: '#64748b', fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                <th style={{ padding: '14px 20px', fontWeight: '600' }}>User ID</th>
+                <th style={{ padding: '14px 20px', fontWeight: '600' }}>Name (பெயர்)</th>
+                <th style={{ padding: '14px 20px', fontWeight: '600' }}>Mobile Number (கைபேசி)</th>
+                <th style={{ padding: '14px 20px', fontWeight: '600' }}>Role (பங்கு)</th>
+                <th style={{ padding: '14px 20px', fontWeight: '600' }}>Registration Date (பதிவு தேதி)</th>
+                <th style={{ padding: '14px 20px', fontWeight: '600' }}>Account Status (கணக்கு நிலை)</th>
+              </tr>
+            </thead>
+            <tbody>
+              {registeredUsers.length === 0 ? (
+                <tr>
+                  <td colSpan={6} style={{ textAlign: 'center', padding: '2rem', color: '#64748b' }}>
+                    Loading registered users from database...
+                  </td>
+                </tr>
+              ) : (
+                registeredUsers.slice(0, 8).map((u: any) => {
+                  const role = u.role || 'Buyer';
+                  const prefix = role === 'Admin' ? 'ADM' : role === 'Seller' ? 'SLR' : role === 'Agent' ? 'AGT' : 'USR';
+                  const uid = u.userId || (u.phone?.includes('8248843385') ? 'ADM-000001' : `${prefix}-000001`);
+                  const isCopied = copiedId === uid;
+                  const isSuspended = u.status === 'Suspended';
+
+                  return (
+                    <tr key={u._id || u.id || uid} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                      <td style={{ padding: '14px 20px' }}>
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                          <span style={{
+                            fontFamily: 'monospace',
+                            fontWeight: 700,
+                            color: role === 'Admin' ? '#0284c7' : '#0f172a',
+                            backgroundColor: role === 'Admin' ? 'rgba(2, 132, 199, 0.1)' : 'rgba(100, 116, 139, 0.08)',
+                            border: `1px solid ${role === 'Admin' ? '#bae6fd' : '#e2e8f0'}`,
+                            padding: '3px 8px',
+                            borderRadius: '6px',
+                            fontSize: '0.85rem'
+                          }}>
+                            {uid}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleCopy(uid)}
+                            title={isCopied ? 'Copied!' : 'Copy User ID'}
+                            style={{
+                              background: isCopied ? '#dcfce7' : 'transparent',
+                              border: '1px solid',
+                              borderColor: isCopied ? '#86efac' : '#cbd5e1',
+                              cursor: 'pointer',
+                              padding: '2px 6px',
+                              borderRadius: '4px',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              fontSize: '11px',
+                              color: isCopied ? '#15803d' : '#64748b'
+                            }}
+                          >
+                            {isCopied ? <Check size={12} color="#15803d" /> : <Copy size={12} />}
+                          </button>
+                        </div>
+                      </td>
+                      <td style={{ padding: '14px 20px', fontWeight: '600', color: '#0f172a' }}>
+                        {u.name || 'User'}
+                      </td>
+                      <td style={{ padding: '14px 20px', fontFamily: 'monospace', color: '#334155' }}>
+                        {u.phone ? u.phone.replace('+91', '+91 ') : '—'}
+                      </td>
+                      <td style={{ padding: '14px 20px' }}>
+                        <span style={{
+                          padding: '3px 8px',
+                          borderRadius: '6px',
+                          fontSize: '0.75rem',
+                          fontWeight: '600',
+                          backgroundColor: role === 'Admin' ? '#e0f2fe' : role === 'Agent' ? '#f3e8ff' : role === 'Seller' ? '#dcfce7' : '#f1f5f9',
+                          color: role === 'Admin' ? '#0369a1' : role === 'Agent' ? '#7e22ce' : role === 'Seller' ? '#15803d' : '#475569'
+                        }}>
+                          {role}
+                        </span>
+                      </td>
+                      <td style={{ padding: '14px 20px', color: '#64748b', fontSize: '0.85rem' }}>
+                        {u.createdAt ? new Date(u.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : 'Recent'}
+                      </td>
+                      <td style={{ padding: '14px 20px' }}>
+                        <span style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          padding: '4px 10px',
+                          borderRadius: '999px',
+                          fontSize: '0.75rem',
+                          fontWeight: 600,
+                          backgroundColor: isSuspended ? '#fee2e2' : '#dcfce7',
+                          color: isSuspended ? '#dc2626' : '#15803d',
+                          border: `1px solid ${isSuspended ? '#fca5a5' : '#86efac'}`
+                        }}>
+                          <span style={{
+                            width: '6px',
+                            height: '6px',
+                            borderRadius: '50%',
+                            backgroundColor: isSuspended ? '#dc2626' : '#16a34a'
+                          }} />
+                          {u.status || 'Active'}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+      </Card>
 
       {/* Tables & Activity Row */}
       <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '24px' }}>
