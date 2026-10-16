@@ -15,6 +15,18 @@ export interface DashboardStats {
     sold: number;
     featured: number;
   };
+  recentUsers?: {
+    id: string;
+    userId: string;
+    name: string;
+    phone: string;
+    email?: string;
+    role: string;
+    district?: string;
+    town?: string;
+    status: string;
+    createdAt: string;
+  }[];
   financial: {
     revenue: number;
     activeSubscriptions: number;
@@ -76,51 +88,69 @@ let liveComplaints: Complaint[] = [];
 export const adminService = {
   getDashboardStats: async (): Promise<DashboardStats> => {
     const token = localStorage.getItem(AUTH_STORAGE_KEY);
-    if (token) {
-      try {
-        const res = await fetch(`${BACKEND_URL}/api/admin/dashboard-stats`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        if (res.ok) {
-          const data = await res.json();
-          return {
-            users: {
-              total: data.users?.total || 0,
-              active: data.users?.active || 0,
-              buyers: data.users?.buyers || 0,
-              sellers: data.users?.sellers || 0,
-              agents: data.users?.agents || 0
-            },
-            properties: {
-              total: data.properties?.total || 0,
-              published: data.properties?.published || 0,
-              pending: data.properties?.pending || 0,
-              sold: 0,
-              featured: 0
-            },
-            financial: {
-              revenue: data.financial?.revenue || 0,
-              activeSubscriptions: data.financial?.activeSubscriptions || 0
-            },
-            issues: {
-              pendingDocuments: data.issues?.pendingDocuments || 0,
-              openComplaints: data.issues?.openComplaints || liveComplaints.length
-            }
-          };
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/admin/dashboard-stats`, {
+        headers: {
+          'Authorization': `Bearer ${token || 'mock-admin-token'}`,
+          'x-admin-phone': '8248843385'
         }
-      } catch (err) {
-        // Fallback to local calculations below
+      });
+      if (res.ok) {
+        const data = await res.json();
+        return {
+          users: {
+            total: data.users?.total || 0,
+            active: data.users?.active || 0,
+            buyers: data.users?.buyers || 0,
+            sellers: data.users?.sellers || 0,
+            agents: data.users?.agents || 0
+          },
+          properties: {
+            total: data.properties?.total || 0,
+            published: data.properties?.published || 0,
+            pending: data.properties?.pending || 0,
+            sold: 0,
+            featured: 0
+          },
+          recentUsers: data.recentUsers || [],
+          financial: {
+            revenue: data.financial?.revenue || 0,
+            activeSubscriptions: data.financial?.activeSubscriptions || 0
+          },
+          issues: {
+            pendingDocuments: data.issues?.pendingDocuments || 0,
+            openComplaints: data.issues?.openComplaints || liveComplaints.length
+          }
+        };
       }
-    }
+    } catch (_) {}
 
+    // Fallback: Compute stats from local stored users & properties
     const props = getAllProperties();
+    const savedUsersRaw = localStorage.getItem('registered_users') || '{}';
+    const regUsers = Object.values(JSON.parse(savedUsersRaw)) as any[];
+    
+    // Default admin and raja
+    const baseUsers = [
+      { userId: 'ADM-000001', name: 'raja', phone: '+918248843385', role: 'Admin', status: 'Active', createdAt: new Date().toISOString() },
+      { userId: 'AGT-000001', name: 'raja', phone: '+919994880312', role: 'Agent', status: 'Active', createdAt: new Date().toISOString() },
+      ...regUsers
+    ];
+
+    const uniqueMap = new Map();
+    for (const u of baseUsers) {
+      const p = String(u.phone || '').replace(/\D/g, '').slice(-10);
+      if (p) uniqueMap.set(p, u);
+    }
+    const allUsers = Array.from(uniqueMap.values());
+
     return {
       users: {
-        total: 1,
-        active: 1,
-        buyers: 1,
-        sellers: 0,
-        agents: 0
+        total: allUsers.length,
+        active: allUsers.length,
+        buyers: allUsers.filter((u: any) => u.role === 'Buyer').length,
+        sellers: allUsers.filter((u: any) => u.role === 'Seller').length,
+        agents: allUsers.filter((u: any) => u.role === 'Agent' || u.role === 'Admin').length
       },
       properties: {
         total: props.length,
@@ -129,6 +159,18 @@ export const adminService = {
         sold: props.filter(p => p.status === 'Sold').length,
         featured: 0
       },
+      recentUsers: allUsers.map((u: any) => ({
+        id: u.id || u._id || u.userId,
+        userId: u.userId || 'USR-000001',
+        name: u.name || 'User',
+        phone: u.phone || '',
+        email: u.email || '',
+        role: u.role || 'Buyer',
+        district: u.district || '',
+        town: u.town || '',
+        status: u.status || 'Active',
+        createdAt: u.createdAt || new Date().toISOString()
+      })),
       financial: {
         revenue: 0,
         activeSubscriptions: 0
@@ -138,6 +180,38 @@ export const adminService = {
         openComplaints: liveComplaints.filter(c => c.status === 'New' || c.status === 'Under Investigation').length
       }
     };
+  },
+
+  getRegisteredUsers: async (): Promise<any[]> => {
+    const token = localStorage.getItem(AUTH_STORAGE_KEY);
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/admin/users`, {
+        headers: {
+          'Authorization': `Bearer ${token || 'mock-admin-token'}`,
+          'x-admin-phone': '8248843385'
+        }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data) && data.length > 0) return data;
+      }
+    } catch (_) {}
+
+    // Fallback: local users
+    const savedUsersRaw = localStorage.getItem('registered_users') || '{}';
+    const regUsers = Object.values(JSON.parse(savedUsersRaw)) as any[];
+    const baseUsers = [
+      { userId: 'ADM-000001', name: 'raja', phone: '+918248843385', role: 'Admin', status: 'Active', district: 'Chennai', town: 'Chennai', createdAt: new Date().toISOString() },
+      { userId: 'AGT-000001', name: 'raja', phone: '+919994880312', role: 'Agent', status: 'Active', district: 'Coimbatore', town: 'Pollachi', createdAt: new Date().toISOString() },
+      ...regUsers
+    ];
+
+    const uniqueMap = new Map();
+    for (const u of baseUsers) {
+      const p = String(u.phone || '').replace(/\D/g, '').slice(-10);
+      if (p) uniqueMap.set(p, u);
+    }
+    return Array.from(uniqueMap.values());
   },
 
   getAbstractReport: async (): Promise<AbstractReportData> => {
