@@ -3,10 +3,11 @@ import { Outlet, useNavigate, useLocation, NavLink } from 'react-router-dom';
 import { 
   LayoutDashboard, Users, Home, FileText, BarChart2, 
   Activity, Settings, LogOut, Menu, X, ShieldAlert,
-  Search, Bell, HelpCircle, ChevronDown, List, PhoneCall
+  Search, Bell, HelpCircle, ChevronDown, List, PhoneCall, Heart
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { contactRequestUtils } from '../utils/contactRequestUtils';
+import { wishlistUtils } from '../utils/wishlistUtils';
 import styles from './AdminLayout.module.css';
 
 export function AdminLayout() {
@@ -15,12 +16,15 @@ export function AdminLayout() {
   const location = useLocation();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [pendingContactCount, setPendingContactCount] = useState(0);
+  const [totalWishesCount, setTotalWishesCount] = useState(0);
 
   useEffect(() => {
     setIsMobileMenuOpen(false);
     const checkPending = async () => {
       const all = await contactRequestUtils.getAllRequests();
       setPendingContactCount(all.filter(r => r.status === 'Pending').length);
+      const wishes = wishlistUtils.getAllPlatformWishes();
+      setTotalWishesCount(wishes.length);
     };
     checkPending();
   }, [location.pathname]);
@@ -52,6 +56,16 @@ export function AdminLayout() {
           <div className={styles.navSectionTitle}>Dashboard</div>
           <NavLink to="/admin/dashboard" className={({isActive}) => isActive ? `${styles.navItem} ${styles.active}` : styles.navItem}>
             <LayoutDashboard size={18} /> Master Dashboard
+          </NavLink>
+
+          <div className={styles.navSectionTitle}>Customer Demand</div>
+          <NavLink to="/admin/wished-properties" className={({isActive}) => isActive ? `${styles.navItem} ${styles.active}` : styles.navItem}>
+            <Heart size={18} /> Customer Wishes
+            {totalWishesCount > 0 && (
+              <span className={styles.badge} style={{ backgroundColor: '#e11d48', color: '#ffffff' }}>
+                {totalWishesCount}
+              </span>
+            )}
           </NavLink>
 
           <div className={styles.navSectionTitle}>Purchase Requests</div>

@@ -93,6 +93,27 @@
   font-weight: 600;
 }
 
+.navItem svg {
+  padding: 3px;
+  border-radius: 6px;
+  border: 1.5px solid #cbd5e1;
+  background-color: #f8fafc;
+  flex-shrink: 0;
+  box-sizing: content-box;
+  transition: all 0.2s ease;
+}
+
+.navItem:hover svg {
+  border-color: #94a3b8;
+  background-color: #f1f5f9;
+}
+
+.navItem.active svg {
+  border-color: #3b82f6;
+  background-color: #dbeafe;
+  color: #2563eb;
+}
+
 .badge {
   margin-left: auto;
   background-color: #ef4444;
@@ -203,18 +224,23 @@
 }
 
 .iconBtn {
-  background: none;
-  border: none;
+  background-color: #ffffff;
+  border: 1.5px solid #cbd5e1;
+  border-radius: 8px;
+  width: 36px;
+  height: 36px;
   color: #64748b;
   cursor: pointer;
   position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: color 0.2s ease;
+  transition: all 0.2s ease;
 }
 
 .iconBtn:hover {
+  border-color: #94a3b8;
+  background-color: #f8fafc;
   color: #0f172a;
 }
 

@@ -129,6 +129,15 @@
 
 .summaryIcon {
   color: var(--color-primary);
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: 1.5px solid #cbd5e1;
+  background-color: #f8fafc;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
 }
 
 .summaryLabel {
@@ -207,9 +216,17 @@
   gap: var(--spacing-2);
   padding: var(--spacing-2) var(--spacing-4);
   background-color: var(--color-surface);
-  border: 1px solid var(--color-border);
+  border: 1.5px solid var(--color-border);
   border-radius: var(--radius-full);
   font-size: var(--font-size-sm);
+}
+
+.featureBadge svg {
+  padding: 2px;
+  border-radius: 6px;
+  border: 1.5px solid #cbd5e1;
+  background-color: #f8fafc;
+  box-sizing: content-box;
 }
 
 .description {

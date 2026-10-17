@@ -54,6 +54,7 @@ import AdminSettings from './pages/admin/AdminSettings';
 import AdminAbstractReport from './pages/admin/AdminAbstractReport';
 import AdminComplaints from './pages/admin/AdminComplaints';
 import AdminContactRequests from './pages/admin/AdminContactRequests';
+import AdminWishlists from './pages/admin/AdminWishlists';
 
 function App() {
   return (
@@ -109,6 +110,7 @@ function App() {
             <Route index element={<Navigate to="dashboard" replace />} />
             <Route path="dashboard" element={<AdminDashboard />} />
             <Route path="contact-requests" element={<AdminContactRequests />} />
+            <Route path="wished-properties" element={<AdminWishlists />} />
             <Route path="users" element={<AdminUsers />} />
             <Route path="properties" element={<AdminProperties />} />
             <Route path="documents" element={<AdminDocuments />} />

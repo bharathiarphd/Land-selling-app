@@ -15,19 +15,23 @@
   position: absolute;
   top: var(--spacing-2);
   right: var(--spacing-2);
-  background-color: rgba(255, 255, 255, 0.9);
+  background-color: rgba(255, 255, 255, 0.95);
   color: var(--color-text-secondary);
+  border: 1.5px solid #cbd5e1;
   border-radius: var(--radius-full);
-  padding: var(--spacing-2);
+  padding: 7px;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: var(--shadow-sm);
-  transition: all 0.2s;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+  transition: all 0.2s ease;
+  z-index: 10;
 }
 
 .favoriteBtn:hover {
   color: var(--color-error);
+  border-color: #fca5a5;
+  transform: scale(1.08);
 }
 
 .badges {
@@ -35,7 +39,31 @@
   top: var(--spacing-2);
   left: var(--spacing-2);
   display: flex;
-  gap: var(--spacing-2);
+  flex-direction: column;
+  gap: 6px;
+  z-index: 5;
+}
+
+/* Reduced Price Islet on Image */
+.priceReducedIslet {
+  background: linear-gradient(135deg, #ef4444, #dc2626);
+  color: #ffffff;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  box-shadow: 0 2px 8px rgba(220, 38, 38, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  letter-spacing: 0.3px;
+  animation: pulseSlow 2.5s infinite;
+}
+
+@keyframes pulseSlow {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.03); }
 }
 
 .content {
@@ -63,9 +91,23 @@
 .location {
   display: flex;
   align-items: center;
-  gap: var(--spacing-1);
+  gap: 6px;
   color: var(--color-text-secondary);
   font-size: var(--font-size-sm);
+}
+
+/* Bordered Icon Containers */
+.iconBox {
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  border: 1.5px solid #cbd5e1;
+  background-color: #f8fafc;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: #0284c7;
 }
 
 .details {
@@ -78,9 +120,37 @@
 .detailItem {
   display: flex;
   align-items: center;
-  gap: var(--spacing-1);
+  gap: 6px;
   font-size: var(--font-size-sm);
   color: var(--color-text-secondary);
+}
+
+/* Price block with reduced amount comparison */
+.priceContainer {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.originalPrice {
+  font-size: 0.78rem;
+  color: #94a3b8;
+  text-decoration: line-through;
+  font-weight: 500;
+}
+
+.reducedBadgeInline {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  background-color: #fef2f2;
+  color: #dc2626;
+  border: 1px solid #fecaca;
+  padding: 1px 6px;
+  border-radius: 10px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  margin-top: 2px;
 }
 
 .actions {

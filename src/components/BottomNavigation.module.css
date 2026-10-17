@@ -33,6 +33,21 @@
   color: var(--color-primary);
 }
 
+.navItem svg {
+  padding: 3px;
+  border-radius: 8px;
+  border: 1.5px solid #cbd5e1;
+  background-color: #f8fafc;
+  box-sizing: content-box;
+  transition: all 0.2s ease;
+}
+
+.navItem.active svg {
+  border-color: var(--color-primary);
+  background-color: rgba(2, 132, 199, 0.12);
+  color: var(--color-primary);
+}
+
 .label {
   font-size: 10px;
   font-weight: var(--font-weight-medium);

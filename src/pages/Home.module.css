@@ -82,7 +82,7 @@
   justify-content: center;
   gap: var(--spacing-2);
   background-color: var(--color-surface);
-  border: 1px solid var(--color-border);
+  border: 1.5px solid var(--color-border);
   border-radius: var(--radius-lg);
   cursor: pointer;
   transition: all 0.2s;
@@ -94,7 +94,21 @@
 }
 
 .categoryIcon {
-  font-size: 32px;
+  font-size: 26px;
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  border: 1.5px solid #cbd5e1;
+  background-color: #f8fafc;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.categoryCard:hover .categoryIcon {
+  border-color: var(--color-primary);
+  background-color: #ffffff;
 }
 
 .categoryName {

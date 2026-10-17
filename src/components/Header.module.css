@@ -45,17 +45,29 @@
 
 .iconBtn {
   color: var(--color-text-secondary);
-  padding: var(--spacing-2);
-  border-radius: var(--radius-full);
+  padding: 6px;
+  border-radius: var(--radius-md);
+  border: 1.5px solid #cbd5e1;
+  background-color: #f8fafc;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: background-color 0.2s;
+  transition: all 0.2s;
+  box-sizing: border-box;
 }
 
 .iconBtn:hover {
   background-color: var(--color-surface-hover);
+  border-color: #94a3b8;
   color: var(--color-text-primary);
+}
+
+.desktopNav svg {
+  padding: 2px;
+  border-radius: 6px;
+  border: 1.5px solid #cbd5e1;
+  background-color: #f8fafc;
+  box-sizing: content-box;
 }
 
 .desktopNav {

@@ -1,5 +1,5 @@
-
-import { Heart, MapPin, Maximize, Map } from 'lucide-react';
+import React from 'react';
+import { Heart, MapPin, Maximize, Map, TrendingDown, Sparkles } from 'lucide-react';
 import { Card } from './Card';
 import { Badge } from './Badge';
 import { Button } from './Button';
@@ -23,6 +23,15 @@ export function PropertyCard({ property, isFavorite = false, onFavoriteClick }: 
     }).format(price);
   };
 
+  const isReduced = Boolean(
+    property.isPriceReduced || 
+    (property.originalPrice && property.originalPrice > property.price)
+  );
+
+  const reducedDifference = property.originalPrice && property.originalPrice > property.price
+    ? property.originalPrice - property.price
+    : property.reducedAmount || 0;
+
   return (
     <Card noPadding>
       <div className={styles.imageContainer}>
@@ -38,47 +47,83 @@ export function PropertyCard({ property, isFavorite = false, onFavoriteClick }: 
               {property.approval} Approved
             </Badge>
           )}
+
+          {/* Amount Reduced Islet Pill */}
+          {isReduced && (
+            <div className={styles.priceReducedIslet}>
+              <TrendingDown size={13} strokeWidth={2.5} />
+              <span>
+                {reducedDifference > 0 
+                  ? `₹${reducedDifference.toLocaleString('en-IN')} OFF` 
+                  : 'PRICE REDUCED'}
+              </span>
+            </div>
+          )}
         </div>
 
-        {/* Premium/Featured Badge - Mock logic for Phase 17 */}
+        {/* Premium/Featured Badge */}
         {(property.id === 'prop-1' || property.price > 10000000) && (
-          <div style={{ position: 'absolute', top: '12px', right: '12px', zIndex: 10, backgroundColor: '#f59e0b', color: 'white', padding: '4px 8px', borderRadius: '4px', fontSize: '12px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '4px', boxShadow: '0 2px 4px rgba(0,0,0,0.2)' }}>
-            ★ PREMIUM
+          <div style={{ position: 'absolute', top: '12px', right: '48px', zIndex: 10, backgroundColor: '#f59e0b', color: 'white', padding: '3px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '4px', boxShadow: '0 2px 4px rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.4)' }}>
+            <Sparkles size={12} /> PREMIUM
           </div>
         )}
 
-        {/* Favorite Button */}
+        {/* Favorite / Wishlist Button with defined border */}
         <button 
           className={styles.favoriteBtn}
           onClick={(e) => {
             e.preventDefault();
             onFavoriteClick?.(property.id);
           }}
-          aria-label={isFavorite ? "Remove from favorites" : "Add to favorites"}
+          aria-label={isFavorite ? "Remove from wishlist" : "Add to wishlist"}
+          title={isFavorite ? "Remove from wishlist" : "Add to wishlist"}
         >
-          <Heart size={20} fill={isFavorite ? "var(--color-error)" : "none"} color={isFavorite ? "var(--color-error)" : "currentColor"} />
+          <Heart size={18} fill={isFavorite ? "var(--color-error)" : "none"} color={isFavorite ? "var(--color-error)" : "currentColor"} />
         </button>
       </div>
 
       <div className={styles.content}>
         <div className={styles.header}>
-          <div>
-            <h3 className={styles.title}>{property.title}</h3>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <h3 className={styles.title} style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              {property.title}
+            </h3>
             <div className={styles.location}>
-              <MapPin size={14} />
+              <span className={styles.iconBox}>
+                <MapPin size={13} />
+              </span>
               <span>{property.location}, {property.district}</span>
             </div>
           </div>
-          <div className="price-text">{formatPrice(property.price)}</div>
+
+          <div className={styles.priceContainer}>
+            {isReduced && property.originalPrice && (
+              <span className={styles.originalPrice}>
+                {formatPrice(property.originalPrice)}
+              </span>
+            )}
+            <div className="price-text" style={{ fontSize: '1.15rem' }}>
+              {formatPrice(property.price)}
+            </div>
+            {isReduced && reducedDifference > 0 && (
+              <span className={styles.reducedBadgeInline}>
+                Save ₹{reducedDifference.toLocaleString('en-IN')}
+              </span>
+            )}
+          </div>
         </div>
 
         <div className={styles.details}>
           <div className={styles.detailItem}>
-            <Maximize size={16} />
+            <span className={styles.iconBox}>
+              <Maximize size={13} />
+            </span>
             <span>{property.area} {property.areaUnit}</span>
           </div>
           <div className={styles.detailItem}>
-            <Map size={16} />
+            <span className={styles.iconBox}>
+              <Map size={13} />
+            </span>
             <span>{property.propertyType}</span>
           </div>
         </div>

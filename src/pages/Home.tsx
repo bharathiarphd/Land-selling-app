@@ -1,6 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ShieldCheck, Search as SearchIcon, MapPin, Handshake, CheckCircle2, Home as HomeIcon } from 'lucide-react';
+import { 
+  ShieldCheck, Search as SearchIcon, MapPin, Handshake, CheckCircle2, 
+  Home as HomeIcon, Heart, TrendingDown, Sparkles 
+} from 'lucide-react';
 import { SearchBar } from '../components/SearchBar';
 import { LocationSelector } from '../components/LocationSelector';
 import { PropertyCard } from '../components/PropertyCard';
@@ -8,26 +11,63 @@ import { Button } from '../components/Button';
 import { getAllProperties, syncPropertiesFromBackend } from '../utils/propertyUtils';
 import type { Property } from '../data/mockProperties';
 import { useLanguage } from '../context/LanguageContext';
+import { useAuth } from '../context/AuthContext';
+import { isAdminUser } from '../utils/adminAuth';
+import { wishlistUtils } from '../utils/wishlistUtils';
 import styles from './Home.module.css';
 
 export default function Home() {
   const navigate = useNavigate();
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
+  const { user } = useAuth();
   const [search, setSearch] = useState('');
   const [favorites, setFavorites] = useState<string[]>([]);
   const [properties, setProperties] = useState<Property[]>(getAllProperties());
 
+  const isAdmin = isAdminUser(user);
+
+  const loadPropertiesAndWishes = () => {
+    const all = getAllProperties();
+    setProperties(all);
+    const userWishIds = wishlistUtils.getUserWishIds(user?.id);
+    setFavorites(userWishIds);
+  };
+
   useEffect(() => {
+    loadPropertiesAndWishes();
     syncPropertiesFromBackend().then(props => {
       setProperties(props);
+      const userWishIds = wishlistUtils.getUserWishIds(user?.id);
+      setFavorites(userWishIds);
     });
-  }, []);
+
+    const handleWishlistUpdated = () => {
+      const userWishIds = wishlistUtils.getUserWishIds(user?.id);
+      setFavorites(userWishIds);
+    };
+
+    window.addEventListener('wishlist_updated', handleWishlistUpdated);
+    return () => window.removeEventListener('wishlist_updated', handleWishlistUpdated);
+  }, [user]);
 
   const handleFavoriteToggle = (id: string) => {
-    setFavorites(prev => 
-      prev.includes(id) ? prev.filter(fId => fId !== id) : [...prev, id]
-    );
+    const prop = properties.find(p => p.id === id);
+    if (prop) {
+      wishlistUtils.toggleWish(prop, user || undefined);
+      const updatedWishIds = wishlistUtils.getUserWishIds(user?.id);
+      setFavorites(updatedWishIds);
+    }
   };
+
+  // Filter user wished properties (for non-admins)
+  const wishedProperties = !isAdmin 
+    ? properties.filter(p => favorites.includes(p.id))
+    : [];
+
+  // Filter properties with reduced amount / price drop
+  const reducedProperties = properties.filter(
+    p => p.isPriceReduced || (p.originalPrice && p.originalPrice > p.price)
+  );
 
   const handleSearch = () => {
     navigate('/search');
@@ -90,6 +130,76 @@ export default function Home() {
           <Button variant="outline" size="lg" onClick={() => navigate('/add-property')}>{t('home.addPropertyButton')}</Button>
         </div>
       </section>
+
+      {/* 1b. Customer & Account Holder Wished Properties (Not for Admin) */}
+      {!isAdmin && wishedProperties.length > 0 && (
+        <section className={styles.section} style={{ backgroundColor: '#fff1f2', padding: 'var(--spacing-6)', borderRadius: 'var(--radius-xl)', border: '1.5px solid #fecaca', marginBottom: 'var(--spacing-8)' }}>
+          <div className={styles.sectionHeader} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+            <div>
+              <h2 className={styles.sectionTitle} style={{ color: '#be123c', display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
+                <Heart size={22} fill="#e11d48" color="#e11d48" />
+                <span>{language === 'ta' ? 'உங்களுக்கு பிடித்த நிலங்கள் (விருப்பப்பட்டியல்)' : 'Your Wished & Liked Properties'}</span>
+                <span style={{ backgroundColor: '#e11d48', color: '#ffffff', fontSize: '0.78rem', padding: '2px 8px', borderRadius: '12px', fontWeight: 700 }}>
+                  {wishedProperties.length}
+                </span>
+              </h2>
+              <p style={{ color: '#9f1239', fontSize: '0.85rem', margin: '4px 0 0' }}>
+                {language === 'ta'
+                  ? 'நீங்கள் விரும்பிய நிலங்கள் - உரிமையாளர் தொடர்பு விவரங்களை கோரலாம்.'
+                  : 'Lands you liked. Request owner contact details or buy directly.'}
+              </p>
+            </div>
+            <Button variant="outline" size="sm" onClick={() => navigate('/favorites')} style={{ borderColor: '#fca5a5', color: '#be123c', fontWeight: 600 }}>
+              {language === 'ta' ? 'அனைத்தையும் பார்க்க' : 'View Full Wishlist'} →
+            </Button>
+          </div>
+          <div className={styles.propertyGrid} style={{ marginTop: 'var(--spacing-4)' }}>
+            {wishedProperties.map(property => (
+              <PropertyCard 
+                key={property.id} 
+                property={property} 
+                isFavorite={true}
+                onFavoriteClick={handleFavoriteToggle}
+              />
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* 1c. Amount Reduced Properties / Price Drop Deals with Islets */}
+      {reducedProperties.length > 0 && (
+        <section className={styles.section} style={{ backgroundColor: '#fef2f2', padding: 'var(--spacing-6)', borderRadius: 'var(--radius-xl)', border: '1px solid #fee2e2', marginBottom: 'var(--spacing-8)' }}>
+          <div className={styles.sectionHeader} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+            <div>
+              <h2 className={styles.sectionTitle} style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#b91c1c', margin: 0 }}>
+                <TrendingDown size={22} color="#dc2626" />
+                <span>{language === 'ta' ? 'விலை குறைக்கப்பட்ட நிலங்கள்' : 'Amount Reduced Properties'}</span>
+                <span style={{ backgroundColor: '#dc2626', color: '#ffffff', fontSize: '0.72rem', padding: '2px 8px', borderRadius: '12px', fontWeight: 700, letterSpacing: '0.5px' }}>
+                  🔥 {language === 'ta' ? 'விலை தள்ளுபடி' : 'PRICE DROPS'}
+                </span>
+              </h2>
+              <p style={{ color: '#991b1b', fontSize: '0.85rem', margin: '4px 0 0' }}>
+                {language === 'ta'
+                  ? 'உரிமையாளர்களால் விலை குறைக்கப்பட்ட சிறப்பு சலுகை நிலங்கள்.'
+                  : 'Recently discounted plots and lands with lowered prices.'}
+              </p>
+            </div>
+            <Button variant="outline" size="sm" onClick={() => navigate('/search')} style={{ borderColor: '#fca5a5', color: '#dc2626' }}>
+              {language === 'ta' ? 'அனைத்து சலுகைகளையும் காண்க' : 'View All Deals'} →
+            </Button>
+          </div>
+          <div className={styles.propertyGrid} style={{ marginTop: 'var(--spacing-4)' }}>
+            {reducedProperties.map(property => (
+              <PropertyCard 
+                key={property.id} 
+                property={property} 
+                isFavorite={favorites.includes(property.id)}
+                onFavoriteClick={handleFavoriteToggle}
+              />
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* 2. Quick Property Categories */}
       <section className={styles.section}>

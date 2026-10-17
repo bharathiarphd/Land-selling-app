@@ -264,6 +264,16 @@ export default function PropertyDetail() {
         {/* Right Column (Sidebar for Desktop) */}
         <div className={styles.sidebar}>
           <div className={styles.priceSection}>
+            {property.originalPrice && property.originalPrice > property.price && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px', flexWrap: 'wrap' }}>
+                <span style={{ textDecoration: 'line-through', color: '#94a3b8', fontSize: '1.1rem', fontWeight: 500 }}>
+                  {formatPrice(property.originalPrice)}
+                </span>
+                <span style={{ backgroundColor: '#fee2e2', color: '#dc2626', border: '1px solid #fecaca', borderRadius: '20px', padding: '3px 10px', fontSize: '0.78rem', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                  🔥 {language === 'ta' ? 'விலை குறைக்கப்பட்டது:' : 'Price Drop:'} ₹{(property.originalPrice - property.price).toLocaleString('en-IN')} {language === 'ta' ? 'சேமிப்பு' : 'OFF'}
+                </span>
+              </div>
+            )}
             <div className={styles.price}>{formatPrice(property.price)}</div>
             {pricePerSqFt && (
               <div className={styles.pricePerUnit}>{formatPrice(pricePerSqFt)} / sq.ft</div>

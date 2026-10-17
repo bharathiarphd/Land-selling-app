@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
-import { MapPin, Phone, Mail, KeyRound, ArrowRight, ArrowLeft, CheckCircle2, ShieldCheck, AlertCircle, RefreshCw, Lock } from 'lucide-react';
+import { MapPin, Phone, Mail, KeyRound, ArrowRight, ArrowLeft, CheckCircle2, ShieldCheck, AlertCircle, RefreshCw, Lock, Heart } from 'lucide-react';
 import { Input } from '../components/Input';
 import { Button } from '../components/Button';
 import { Checkbox } from '../components/Checkbox';
@@ -8,6 +8,7 @@ import { authService } from '../services/authService';
 import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../context/AuthContext';
 import { getSavedCredentials, saveCredentials, clearSavedCredentials, ADMIN_PHONE_NUMBER, isAdminUser } from '../utils/adminAuth';
+import { formatCapitalizedName } from '../utils/wishlistUtils';
 import styles from './Auth.module.css';
 
 type LoginOption = 'pin' | 'email' | 'phone';
@@ -89,6 +90,41 @@ export default function Login() {
   const navigate = useNavigate();
   const location = useLocation();
 
+  // Loginer name state formatted with first letter capital and others lowercase
+  const [loginerName, setLoginerName] = useState<string>('');
+
+  const resolveLoginerName = (ph?: string, em?: string): string => {
+    const cleanPh = (ph || '').replace(/\D/g, '').slice(-10);
+    if (cleanPh === ADMIN_PHONE_NUMBER) return 'Raja';
+
+    try {
+      const rawUsers = localStorage.getItem('registered_users');
+      if (rawUsers) {
+        const map = JSON.parse(rawUsers);
+        const found = Object.values(map).find((u: any) => 
+          (cleanPh && u.phone && u.phone.includes(cleanPh)) ||
+          (em && u.email && u.email.toLowerCase() === em.toLowerCase())
+        ) as any;
+        if (found?.name) return formatCapitalizedName(found.name);
+      }
+    } catch (_) {}
+
+    try {
+      const rawUser = localStorage.getItem('land_selling_app_user');
+      if (rawUser) {
+        const u = JSON.parse(rawUser);
+        if (u?.name) return formatCapitalizedName(u.name);
+      }
+    } catch (_) {}
+
+    const lastName = localStorage.getItem('land_app_last_login_name');
+    if (lastName) return formatCapitalizedName(lastName);
+
+    if (user?.name && user.name !== 'User') return formatCapitalizedName(user.name);
+
+    return '';
+  };
+
   // Load saved ID & password on mount
   useEffect(() => {
     const searchParams = new URLSearchParams(window.location.search);
@@ -102,11 +138,14 @@ export default function Login() {
       if (saved.pin) setPin(saved.pin);
       if (saved.email) setEmail(saved.email);
       if (saved.password) setPassword(saved.password);
+      const name = resolveLoginerName(saved.phone, saved.email);
+      if (name) setLoginerName(name);
     } else if (isAdminRequested) {
       setSelectedOption('pin');
       setPhone(ADMIN_PHONE_NUMBER);
       const savedAdminPin = localStorage.getItem(`pin_${ADMIN_PHONE_NUMBER}`) || '5983';
       setPin(savedAdminPin);
+      setLoginerName('Raja');
     } else {
       const lastPhone = localStorage.getItem('land_app_last_login_phone') || sessionStorage.getItem('pending_auth_phone');
       if (lastPhone) {
@@ -116,9 +155,21 @@ export default function Login() {
           setPin(savedPin);
           setSelectedOption('pin');
         }
+        const name = resolveLoginerName(lastPhone, '');
+        if (name) setLoginerName(name);
+      } else {
+        const name = resolveLoginerName('', '');
+        if (name) setLoginerName(name);
       }
     }
   }, [location]);
+
+  useEffect(() => {
+    if (phone || email) {
+      const name = resolveLoginerName(phone, email);
+      if (name) setLoginerName(name);
+    }
+  }, [phone, email]);
 
   const isTamil = language === 'ta';
 
@@ -189,6 +240,10 @@ export default function Login() {
         const user = await authService.loginWithPin(phone, pin);
         login(user);
 
+        if (user?.name) {
+          localStorage.setItem('land_app_last_login_name', formatCapitalizedName(user.name));
+        }
+
         // Save credentials if rememberMe is enabled
         if (rememberMe) {
           saveCredentials({
@@ -252,6 +307,10 @@ export default function Login() {
       try {
         const user = await authService.loginWithEmail(email, password);
         login(user);
+
+        if (user?.name) {
+          localStorage.setItem('land_app_last_login_name', formatCapitalizedName(user.name));
+        }
 
         // Save credentials if rememberMe is enabled
         if (rememberMe) {
@@ -333,6 +392,10 @@ export default function Login() {
         try {
           const result = await authService.verifyOtp(phone, otpCode);
           login(result.user);
+
+          if (result.user?.name) {
+            localStorage.setItem('land_app_last_login_name', formatCapitalizedName(result.user.name));
+          }
 
           if (rememberMe) {
             saveCredentials({
@@ -428,6 +491,45 @@ export default function Login() {
 
       <div className={styles.header}>
         <h1 className={styles.title}>{t('auth.login')}</h1>
+
+        {/* Loginer name formatted with first letter capital and others lowercase */}
+        {loginerName && (
+          <div style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '8px',
+            backgroundColor: 'rgba(2, 132, 199, 0.08)',
+            border: '1.5px solid #0284c7',
+            borderRadius: '9999px',
+            padding: '5px 16px',
+            margin: '8px auto 6px auto',
+            color: '#0369a1',
+            fontWeight: 600,
+            fontSize: '0.925rem',
+            boxShadow: '0 2px 6px rgba(2, 132, 199, 0.08)'
+          }}>
+            <span style={{
+              width: '24px',
+              height: '24px',
+              borderRadius: '50%',
+              backgroundColor: '#0284c7',
+              color: '#ffffff',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: '0.8rem',
+              fontWeight: 700,
+              border: '1.5px solid #ffffff'
+            }}>
+              {loginerName.charAt(0).toUpperCase()}
+            </span>
+            <span>
+              {isTamil ? 'வணக்கம், ' : 'Welcome back, '}
+              <strong style={{ color: '#0284c7', fontWeight: 800 }}>{formatCapitalizedName(loginerName)}</strong>
+            </span>
+          </div>
+        )}
+
         <p className={styles.subtitle}>
           {selectedOption
             ? isTamil
@@ -437,6 +539,61 @@ export default function Login() {
             ? 'உள்நுழைய ஒரு வழியை தேர்ந்தெடுக்கவும்'
             : 'Select one login option to get started'}
         </p>
+
+        {/* Customer Wished Properties on Main Page Access Banner */}
+        <div style={{
+          marginTop: '12px',
+          padding: '8px 12px',
+          backgroundColor: '#fff1f2',
+          border: '1.5px solid #fda4af',
+          borderRadius: '10px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '8px',
+          textAlign: 'left'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <div style={{
+              width: '30px',
+              height: '30px',
+              borderRadius: '6px',
+              border: '1.5px solid #f43f5e',
+              backgroundColor: '#ffe4e6',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: '#e11d48',
+              flexShrink: 0
+            }}>
+              <Heart size={15} fill="#e11d48" />
+            </div>
+            <div>
+              <div style={{ fontSize: '0.825rem', fontWeight: 700, color: '#9f1239', lineHeight: 1.2 }}>
+                {isTamil ? 'விருப்பமான நிலங்கள் முகப்பு பக்கத்தில்' : 'Your Wished Properties'}
+              </div>
+              <div style={{ fontSize: '0.725rem', color: '#be123c', lineHeight: 1.2 }}>
+                {isTamil ? 'நீங்கள் விரும்பிய நிலங்கள் முகப்பு பக்கத்தில் உள்ளன' : 'View customer liked properties on Main Page'}
+              </div>
+            </div>
+          </div>
+          <Link
+            to="/"
+            style={{
+              padding: '5px 12px',
+              borderRadius: '6px',
+              backgroundColor: '#e11d48',
+              color: '#ffffff',
+              fontSize: '0.75rem',
+              fontWeight: 700,
+              textDecoration: 'none',
+              border: '1.5px solid #be123c',
+              whiteSpace: 'nowrap'
+            }}
+          >
+            {isTamil ? 'முகப்பு பக்கம்' : 'Go to Home'}
+          </Link>
+        </div>
       </div>
 
       <div className={styles.formCard}>

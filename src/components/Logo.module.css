@@ -15,4 +15,5 @@
   color: var(--color-primary);
   border-radius: var(--radius-md);
   padding: var(--spacing-1);
+  border: 1.5px solid var(--color-primary);
 }

@@ -4,6 +4,9 @@ export interface Property {
   description: string;
   propertyType: 'Residential Land' | 'Residential Plot' | 'Agricultural Land' | 'Farm Land' | 'Commercial Land' | 'Industrial Land' | 'House Site' | 'Corner Plot' | 'Plot' | 'Other';
   price: number;
+  originalPrice?: number; // Original price before price drop
+  isPriceReduced?: boolean; // True if amount reduced
+  reducedAmount?: number; // Amount saved
   area: number;
   areaUnit: 'Sq.Ft' | 'Sq.M' | 'Acre' | 'Cent' | 'Ground';
   location: string;
