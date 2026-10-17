@@ -466,6 +466,7 @@ export const authService = {
             pin: pendingRegistration?.pin || undefined,
             district: pendingRegistration?.district || undefined,
             town: pendingRegistration?.town || undefined,
+<<<<<<< HEAD
             pincode: pendingRegistration?.pincode || undefined,
             address: pendingRegistration?.address || undefined,
             locality: pendingRegistration?.locality || undefined,
@@ -474,6 +475,9 @@ export const authService = {
             country: pendingRegistration?.country || 'India',
             latitude: pendingRegistration?.latitude ?? null,
             longitude: pendingRegistration?.longitude ?? null
+=======
+            pincode: pendingRegistration?.pincode || undefined
+>>>>>>> 69ad14058bd7f6244372eec4d9cfe64c9ee3a48d
           };
 
           const response = await fetch(`${BACKEND_URL}/api/users/sync`, {
@@ -490,7 +494,10 @@ export const authService = {
             if (data.user) {
               user = {
                 id: data.user.firebaseUid || firebaseUser.uid,
+<<<<<<< HEAD
                 firebaseUid: data.user.firebaseUid || firebaseUser.uid,
+=======
+>>>>>>> 69ad14058bd7f6244372eec4d9cfe64c9ee3a48d
                 userId: data.user.userId,
                 name: data.user.name || user.name,
                 email: data.user.email || user.email,
@@ -499,6 +506,7 @@ export const authService = {
                 district: data.user.district,
                 town: data.user.town,
                 pincode: data.user.pincode,
+<<<<<<< HEAD
                 address: data.user.address || pendingRegistration?.address || '',
                 locality: data.user.locality || pendingRegistration?.locality || '',
                 city: data.user.city || pendingRegistration?.city || data.user.town || '',
@@ -506,6 +514,8 @@ export const authService = {
                 country: data.user.country || pendingRegistration?.country || 'India',
                 latitude: data.user.latitude !== undefined ? data.user.latitude : (pendingRegistration?.latitude ?? null),
                 longitude: data.user.longitude !== undefined ? data.user.longitude : (pendingRegistration?.longitude ?? null),
+=======
+>>>>>>> 69ad14058bd7f6244372eec4d9cfe64c9ee3a48d
                 isVerified: true
               };
             }
@@ -514,9 +524,12 @@ export const authService = {
           console.warn('Backend sync bypassed:', err);
         }
 
+<<<<<<< HEAD
         // Save confirmed user profile & address details in Cloud Firestore
         await this.saveUserProfileToFirestore(user);
 
+=======
+>>>>>>> 69ad14058bd7f6244372eec4d9cfe64c9ee3a48d
         // Cache locally for offline resilience
         try {
           const savedUsersRaw = localStorage.getItem('registered_users') || '{}';
@@ -984,6 +997,7 @@ export const authService = {
                   district: regData.user.district,
                   town: regData.user.town,
                   pincode: regData.user.pincode,
+<<<<<<< HEAD
                   address: regData.user.address || cachedUser?.address || '',
                   locality: regData.user.locality || cachedUser?.locality || '',
                   city: regData.user.city || cachedUser?.city || regData.user.town || '',
@@ -991,6 +1005,8 @@ export const authService = {
                   country: regData.user.country || cachedUser?.country || 'India',
                   latitude: regData.user.latitude !== undefined ? regData.user.latitude : (cachedUser?.latitude ?? null),
                   longitude: regData.user.longitude !== undefined ? regData.user.longitude : (cachedUser?.longitude ?? null),
+=======
+>>>>>>> 69ad14058bd7f6244372eec4d9cfe64c9ee3a48d
                   isVerified: true
                 };
                 localStorage.setItem(AUTH_STORAGE_KEY, regData.token);
