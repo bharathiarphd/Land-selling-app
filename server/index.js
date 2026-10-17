@@ -188,7 +188,6 @@ const userSchema = new mongoose.Schema({
   district: { type: String, default: '' },
   town: { type: String, default: '' },
   pincode: { type: String, default: '' },
-<<<<<<< HEAD
   address: { type: String, default: '' },
   locality: { type: String, default: '' },
   city: { type: String, default: '' },
@@ -199,10 +198,6 @@ const userSchema = new mongoose.Schema({
   status: { type: String, enum: ['Active', 'Suspended', 'Pending'], default: 'Active' },
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now }
-=======
-  status: { type: String, enum: ['Active', 'Suspended', 'Pending'], default: 'Active' },
-  createdAt: { type: Date, default: Date.now }
->>>>>>> 69ad14058bd7f6244372eec4d9cfe64c9ee3a48d
 });
 const User = mongoose.model('User', userSchema);
 
@@ -353,7 +348,6 @@ const requireAdmin = async (req, res, next) => {
 // Direct Registration with 4-digit PIN (Bypasses SMS message)
 app.post('/api/auth/register', async (req, res) => {
   try {
-<<<<<<< HEAD
     const { 
       name, 
       phone, 
@@ -372,9 +366,6 @@ app.post('/api/auth/register', async (req, res) => {
       latitude,
       longitude
     } = req.body;
-=======
-    const { name, phone, email, role, pin, district, town, pincode, firebaseUid } = req.body;
->>>>>>> 69ad14058bd7f6244372eec4d9cfe64c9ee3a48d
     if (!name || !phone || !pin) {
       return res.status(400).json({ error: 'Name, mobile number, and 4-digit PIN are required' });
     }
@@ -419,7 +410,6 @@ app.post('/api/auth/register', async (req, res) => {
       if (district) existingUser.district = String(district).trim();
       if (town) existingUser.town = String(town).trim();
       if (pincode) existingUser.pincode = String(pincode).trim();
-<<<<<<< HEAD
       if (address !== undefined) existingUser.address = String(address).trim();
       if (locality !== undefined) existingUser.locality = String(locality).trim();
       if (city !== undefined) existingUser.city = String(city).trim();
@@ -428,9 +418,6 @@ app.post('/api/auth/register', async (req, res) => {
       if (latitude !== undefined) existingUser.latitude = latitude !== null ? Number(latitude) : null;
       if (longitude !== undefined) existingUser.longitude = longitude !== null ? Number(longitude) : null;
       existingUser.updatedAt = new Date();
-
-=======
->>>>>>> 69ad14058bd7f6244372eec4d9cfe64c9ee3a48d
       if (firebaseUid && (!existingUser.firebaseUid || existingUser.firebaseUid.startsWith('mock-token'))) {
         existingUser.firebaseUid = firebaseUid;
       }
@@ -472,7 +459,6 @@ app.post('/api/auth/register', async (req, res) => {
           district: existingUser.district,
           town: existingUser.town,
           pincode: existingUser.pincode,
-<<<<<<< HEAD
           address: existingUser.address || '',
           locality: existingUser.locality || '',
           city: existingUser.city || existingUser.town || '',
@@ -483,10 +469,6 @@ app.post('/api/auth/register', async (req, res) => {
           status: existingUser.status || 'Active',
           createdAt: existingUser.createdAt,
           updatedAt: existingUser.updatedAt,
-=======
-          status: existingUser.status || 'Active',
-          createdAt: existingUser.createdAt,
->>>>>>> 69ad14058bd7f6244372eec4d9cfe64c9ee3a48d
           isVerified: true
         }
       });
@@ -508,7 +490,6 @@ app.post('/api/auth/register', async (req, res) => {
       district: district ? String(district).trim() : '',
       town: town ? String(town).trim() : (city ? String(city).trim() : ''),
       pincode: pincode ? String(pincode).trim() : '',
-<<<<<<< HEAD
       address: address ? String(address).trim() : '',
       locality: locality ? String(locality).trim() : '',
       city: city ? String(city).trim() : (town ? String(town).trim() : ''),
@@ -519,10 +500,6 @@ app.post('/api/auth/register', async (req, res) => {
       status: 'Active',
       createdAt: new Date(),
       updatedAt: new Date()
-=======
-      status: 'Active',
-      createdAt: new Date()
->>>>>>> 69ad14058bd7f6244372eec4d9cfe64c9ee3a48d
     };
 
     if (isMongoConnected()) {
@@ -556,7 +533,6 @@ app.post('/api/auth/register', async (req, res) => {
         district: userData.district,
         town: userData.town,
         pincode: userData.pincode,
-<<<<<<< HEAD
         address: userData.address,
         locality: userData.locality,
         city: userData.city,
@@ -567,10 +543,6 @@ app.post('/api/auth/register', async (req, res) => {
         status: userData.status,
         createdAt: userData.createdAt,
         updatedAt: userData.updatedAt,
-=======
-        status: userData.status,
-        createdAt: userData.createdAt,
->>>>>>> 69ad14058bd7f6244372eec4d9cfe64c9ee3a48d
         isVerified: true
       }
     });
@@ -697,7 +669,6 @@ app.post('/api/auth/login-pin', async (req, res) => {
         district: user.district || '',
         town: user.town || '',
         pincode: user.pincode || '',
-<<<<<<< HEAD
         address: user.address || '',
         locality: user.locality || '',
         city: user.city || user.town || '',
@@ -708,10 +679,6 @@ app.post('/api/auth/login-pin', async (req, res) => {
         status: user.status || 'Active',
         createdAt: user.createdAt,
         updatedAt: user.updatedAt,
-=======
-        status: user.status || 'Active',
-        createdAt: user.createdAt,
->>>>>>> 69ad14058bd7f6244372eec4d9cfe64c9ee3a48d
         isVerified: true
       }
     });
@@ -944,7 +911,6 @@ app.post('/api/auth/reset-password-otp', async (req, res) => {
 // Sync User from Firebase / Mock to Database
 app.post('/api/users/sync', verifyToken, async (req, res) => {
   try {
-<<<<<<< HEAD
     const { 
       phone, 
       name, 
@@ -962,9 +928,6 @@ app.post('/api/users/sync', verifyToken, async (req, res) => {
       latitude,
       longitude
     } = req.body;
-=======
-    const { phone, name, email, role, pin, district, town, pincode } = req.body;
->>>>>>> 69ad14058bd7f6244372eec4d9cfe64c9ee3a48d
     const uid = req.user.uid || req.user.firebaseUid;
     const formattedPhone = phone || req.user.phone_number || req.user.phone || '';
     const digits = formattedPhone.replace(/\D/g, '').slice(-10);
@@ -1007,7 +970,6 @@ app.post('/api/users/sync', verifyToken, async (req, res) => {
         district: district ? String(district).trim() : '',
         town: town ? String(town).trim() : '',
         pincode: pincode ? String(pincode).trim() : '',
-<<<<<<< HEAD
         address: address ? String(address).trim() : '',
         locality: locality ? String(locality).trim() : '',
         city: city ? String(city).trim() : (town ? String(town).trim() : ''),
@@ -1018,10 +980,6 @@ app.post('/api/users/sync', verifyToken, async (req, res) => {
         status: 'Active',
         createdAt: new Date(),
         updatedAt: new Date()
-=======
-        status: 'Active',
-        createdAt: new Date()
->>>>>>> 69ad14058bd7f6244372eec4d9cfe64c9ee3a48d
       };
 
       if (isMongoConnected()) {
@@ -1044,7 +1002,6 @@ app.post('/api/users/sync', verifyToken, async (req, res) => {
       if (district) user.district = String(district).trim();
       if (town) user.town = String(town).trim();
       if (pincode) user.pincode = String(pincode).trim();
-<<<<<<< HEAD
       if (address !== undefined) user.address = String(address).trim();
       if (locality !== undefined) user.locality = String(locality).trim();
       if (city !== undefined) user.city = String(city).trim();
@@ -1053,9 +1010,6 @@ app.post('/api/users/sync', verifyToken, async (req, res) => {
       if (latitude !== undefined) user.latitude = latitude !== null ? Number(latitude) : null;
       if (longitude !== undefined) user.longitude = longitude !== null ? Number(longitude) : null;
       user.updatedAt = new Date();
-
-=======
->>>>>>> 69ad14058bd7f6244372eec4d9cfe64c9ee3a48d
       if (!user.phone && withCountryCode) user.phone = withCountryCode;
       if (uid && (!user.firebaseUid || user.firebaseUid.startsWith('mock-token'))) user.firebaseUid = uid;
       if (!user.userId) user.userId = autoUserId;

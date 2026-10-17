@@ -1,0 +1,40 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && (
+        request.auth.token.phone_number == '+918248843385' ||
+        request.auth.token.phone_number == '8248843385' ||
+        request.auth.token.email == 'admin@example.com' ||
+        request.auth.token.admin == true
+      );
+    }
+
+    // Property images: publicly readable, uploaded by logged-in users
+    match /properties/{allPaths=**} {
+      allow read: if true;
+      allow write: if isAuthenticated() && (
+        request.resource.size < 10 * 1024 * 1024 && // max 10MB
+        request.resource.contentType.matches('image/.*')
+      ) || isAdmin();
+    }
+
+    // User profile images: publicly readable, updated only by the owner or admin
+    match /users/{userId}/{allPaths=**} {
+      allow read: if true;
+      allow write: if (isAuthenticated() && request.auth.uid == userId) || isAdmin();
+    }
+
+    // Documents (Patta, Chitta, Legal approval scans)
+    match /documents/{propertyId}/{allPaths=**} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() || isAdmin();
+    }
+  }
+}

@@ -1,20 +1,92 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    
-    // User profile rules: Users can only read and write their own profile document
-    // Document ID matches the user's Firebase Auth UID
-    match /users/{userId} {
-      allow read: if request.auth != null && request.auth.uid == userId;
-      allow create: if request.auth != null && request.auth.uid == userId;
-      allow update: if request.auth != null && request.auth.uid == userId;
-      allow delete: if request.auth != null && request.auth.uid == userId;
+
+    // Helper function: Check if user is authenticated (logged in)
+    function isAuthenticated() {
+      return request.auth != null;
     }
 
-    // Public properties collection (if also used with Firestore in future)
-    match /properties/{propertyId} {
+    // Helper function: Check if current user is Admin
+    // Matches the app's designated admin phone (+918248843385) or admin custom claim
+    function isAdmin() {
+      return isAuthenticated() && (
+        request.auth.token.phone_number == '+918248843385' ||
+        request.auth.token.phone_number == '8248843385' ||
+        request.auth.token.email == 'admin@example.com' ||
+        request.auth.token.admin == true
+      );
+    }
+
+    // -------------------------------------------------------------
+    // USERS COLLECTION (/users/{userId})
+    // -------------------------------------------------------------
+    // Whenever a user logs in, their profile, phone, address, and role
+    // are stored in Firestore without permission errors.
+    match /users/{userId} {
+      // Allow reading profiles so buyers can see seller contact details and admin can list users
       allow read: if true;
-      allow create, update, delete: if request.auth != null;
+
+      // When a user is logged in (authenticated), allow them to store and update their profile data
+      allow create, update: if isAuthenticated();
+
+      // Only the user themselves or Admin can delete the user account document
+      allow delete: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
+    }
+
+    // -------------------------------------------------------------
+    // PROPERTIES COLLECTION (/properties/{propertyId})
+    // -------------------------------------------------------------
+    // Land, plots, and commercial listings
+    match /properties/{propertyId} {
+      // Anyone can browse land/plot listings
+      allow read: if true;
+
+      // Logged-in users (Sellers, Agents, Individuals) can post listings
+      allow create: if isAuthenticated();
+
+      // Only the logged-in owner who posted it or Admin can edit or delete
+      allow update, delete: if isAuthenticated() && (
+        resource.data.sellerId == request.auth.uid ||
+        resource.data.userId == request.auth.uid ||
+        isAdmin()
+      );
+    }
+
+    // -------------------------------------------------------------
+    // INQUIRIES & LEADS (/inquiries/{inquiryId})
+    // -------------------------------------------------------------
+    // Buyer contact inquiries sent to land sellers
+    match /inquiries/{inquiryId} {
+      // Logged-in users can send inquiries
+      allow create: if isAuthenticated();
+
+      // Buyer, seller, or Admin can read
+      allow read: if isAuthenticated() && (
+        resource.data.buyerId == request.auth.uid ||
+        resource.data.sellerId == request.auth.uid ||
+        isAdmin()
+      );
+
+      // Seller or Admin can update status
+      allow update, delete: if isAuthenticated() && (
+        resource.data.sellerId == request.auth.uid ||
+        isAdmin()
+      );
+    }
+
+    // -------------------------------------------------------------
+    // FAVORITES / SHORTLIST (/favorites/{favoriteId})
+    // -------------------------------------------------------------
+    match /favorites/{favoriteId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    // -------------------------------------------------------------
+    // FALLBACK FOR OTHER COLLECTIONS
+    // -------------------------------------------------------------
+    match /{document=**} {
+      allow read, write: if isAuthenticated();
     }
   }
 }
