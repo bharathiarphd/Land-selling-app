@@ -5,6 +5,7 @@ import { ImageGallery } from '../components/ImageGallery';
 import { SellerCard } from '../components/SellerCard';
 import { PropertyCard } from '../components/PropertyCard';
 import { Modal } from '../components/Modal';
+import { ContactRequestModal } from '../components/ContactRequestModal';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { EmptyState } from '../components/EmptyState';
@@ -24,6 +25,7 @@ export default function PropertyDetail() {
   const [isFavorite, setIsFavorite] = useState(false);
   const [showToast, setShowToast] = useState<{message: string, variant: 'success'|'info'|'error'} | null>(null);
   const [isEnquiryOpen, setIsEnquiryOpen] = useState(false);
+  const [isContactRequestOpen, setIsContactRequestOpen] = useState(false);
   const [isSubmittingEnquiry, setIsSubmittingEnquiry] = useState(false);
   const { t, language } = useLanguage();
   const [enquiryForm, setEnquiryForm] = useState({ name: '', phone: '', email: '', message: language === 'ta' ? 'இந்த சொத்தில் எனக்கு ஆர்வம் உள்ளது. கூடுதல் விவரங்களை வழங்கவும்.' : "I'm interested in this property. Please provide more details." });
@@ -84,11 +86,23 @@ export default function PropertyDetail() {
   };
 
   const handleFavoriteToggle = () => {
-    setIsFavorite(!isFavorite);
-    setShowToast({ 
-      message: !isFavorite ? 'Property saved to favorites' : 'Property removed from saved properties', 
-      variant: !isFavorite ? 'success' : 'info' 
-    });
+    const nextState = !isFavorite;
+    setIsFavorite(nextState);
+    if (nextState) {
+      setShowToast({ 
+        message: language === 'ta' ? 'விருப்பப்பட்டியலில் சேர்க்கப்பட்டது! உரிமையாளர் தொடர்பு கோரலாம்.' : 'Liked property! Opening request to contact owner...', 
+        variant: 'success' 
+      });
+      // Seamlessly open contact request modal after like
+      setTimeout(() => {
+        setIsContactRequestOpen(true);
+      }, 400);
+    } else {
+      setShowToast({ 
+        message: language === 'ta' ? 'விருப்பப்பட்டியலில் இருந்து நீக்கப்பட்டது' : 'Property removed from saved properties', 
+        variant: 'info' 
+      });
+    }
   };
 
   const handleEnquirySubmit = async () => {
@@ -287,7 +301,12 @@ export default function PropertyDetail() {
             </div>
           </div>
 
-          <SellerCard seller={property.seller} onEnquireClick={() => setIsEnquiryOpen(true)} />
+          <SellerCard 
+            seller={property.seller} 
+            property={property} 
+            onEnquireClick={() => setIsEnquiryOpen(true)} 
+            onRequestContactClick={() => setIsContactRequestOpen(true)} 
+          />
 
           <Button style={{ width: '100%', marginTop: 'var(--spacing-4)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 'var(--spacing-2)' }} variant="outline" onClick={handleSiteVisit}>
             <Calendar size={18} /> {language === 'ta' ? 'தள வருகையை கோருக' : 'Request Site Visit'}
@@ -314,9 +333,14 @@ export default function PropertyDetail() {
 
       {/* Mobile Sticky Contact Bar */}
       <div className={styles.stickyContactBar}>
+        <Button 
+          style={{ flex: 1.5, backgroundColor: '#0284c7', color: '#ffffff', fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }} 
+          onClick={() => setIsContactRequestOpen(true)}
+        >
+          <Heart size={16} fill="currentColor" /> {language === 'ta' ? 'வாங்க கோரிக்கை' : 'Request Contact'}
+        </Button>
         <Button variant="outline" style={{ flex: 1 }} onClick={handleSiteVisit}><Calendar size={16} /> {language === 'ta' ? 'வருகை' : 'Visit'}</Button>
         <Button variant="outline" style={{ flex: 1 }} onClick={() => setIsEnquiryOpen(true)}>{language === 'ta' ? 'விசாரிக்க' : 'Enquire'}</Button>
-        <Button style={{ flex: 1 }} onClick={() => navigate('/messages')}>{language === 'ta' ? 'பேசுக' : 'Chat'}</Button>
       </div>
 
       {/* Enquiry Modal */}
@@ -359,6 +383,19 @@ export default function PropertyDetail() {
           </div>
         </div>
       </Modal>
+
+      {/* Contact Request Modal (Admin Approval Flow) */}
+      <ContactRequestModal
+        isOpen={isContactRequestOpen}
+        onClose={() => setIsContactRequestOpen(false)}
+        property={property}
+        onSuccess={() => {
+          setShowToast({
+            message: language === 'ta' ? 'கோரிக்கை நிர்வாகியிடம் சமர்ப்பிக்கப்பட்டது!' : 'Request submitted to Admin for approval!',
+            variant: 'success'
+          });
+        }}
+      />
 
       {/* Toast Notifications */}
       {showToast && (

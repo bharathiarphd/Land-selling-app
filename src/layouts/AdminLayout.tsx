@@ -3,9 +3,10 @@ import { Outlet, useNavigate, useLocation, NavLink } from 'react-router-dom';
 import { 
   LayoutDashboard, Users, Home, FileText, BarChart2, 
   Activity, Settings, LogOut, Menu, X, ShieldAlert,
-  Search, Bell, HelpCircle, ChevronDown, List
+  Search, Bell, HelpCircle, ChevronDown, List, PhoneCall
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { contactRequestUtils } from '../utils/contactRequestUtils';
 import styles from './AdminLayout.module.css';
 
 export function AdminLayout() {
@@ -13,9 +14,15 @@ export function AdminLayout() {
   const navigate = useNavigate();
   const location = useLocation();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [pendingContactCount, setPendingContactCount] = useState(0);
 
   useEffect(() => {
     setIsMobileMenuOpen(false);
+    const checkPending = async () => {
+      const all = await contactRequestUtils.getAllRequests();
+      setPendingContactCount(all.filter(r => r.status === 'Pending').length);
+    };
+    checkPending();
   }, [location.pathname]);
 
   const handleLogout = () => {
@@ -45,6 +52,16 @@ export function AdminLayout() {
           <div className={styles.navSectionTitle}>Dashboard</div>
           <NavLink to="/admin/dashboard" className={({isActive}) => isActive ? `${styles.navItem} ${styles.active}` : styles.navItem}>
             <LayoutDashboard size={18} /> Master Dashboard
+          </NavLink>
+
+          <div className={styles.navSectionTitle}>Purchase Requests</div>
+          <NavLink to="/admin/contact-requests" className={({isActive}) => isActive ? `${styles.navItem} ${styles.active}` : styles.navItem}>
+            <PhoneCall size={18} /> Contact Requests
+            {pendingContactCount > 0 && (
+              <span className={styles.badge} style={{ backgroundColor: '#ea580c', color: '#ffffff' }}>
+                {pendingContactCount}
+              </span>
+            )}
           </NavLink>
 
           <div className={styles.navSectionTitle}>Users</div>

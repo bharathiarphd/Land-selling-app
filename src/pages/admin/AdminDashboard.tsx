@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { 
   Users, Home, IndianRupee, ShieldAlert, FileText, CheckCircle, 
   TrendingUp, TrendingDown, Plus, Eye, Download, FileSpreadsheet, MapPin, Clock,
-  Copy, Check, ExternalLink
+  Copy, Check, ExternalLink, PhoneCall
 } from 'lucide-react';
 import { 
   AreaChart, Area, LineChart, Line, XAxis, YAxis, CartesianGrid, 
@@ -11,6 +11,7 @@ import {
 } from 'recharts';
 import { adminService, type DashboardStats } from '../../services/adminService';
 import { getAllProperties } from '../../utils/propertyUtils';
+import { contactRequestUtils } from '../../utils/contactRequestUtils';
 
 export default function AdminDashboard() {
   const [timeFilter, setTimeFilter] = useState('30 Days');
@@ -18,6 +19,7 @@ export default function AdminDashboard() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [registeredUsers, setRegisteredUsers] = useState<any[]>([]);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [pendingRequestsCount, setPendingRequestsCount] = useState<number>(0);
 
   const handleCopy = (id: string) => {
     if (!id) return;
@@ -32,6 +34,9 @@ export default function AdminDashboard() {
     });
     adminService.getRegisteredUsers().then(users => {
       setRegisteredUsers(users);
+    });
+    contactRequestUtils.getAllRequests().then(requests => {
+      setPendingRequestsCount(requests.filter(r => r.status === 'Pending').length);
     });
   }, []);
 
@@ -216,12 +221,32 @@ export default function AdminDashboard() {
             <span style={{ color: '#c2410c' }}>active reports</span>
           </div>
         </Card>
+
+        <Link to="/admin/contact-requests" style={{ textDecoration: 'none' }}>
+          <Card style={{ backgroundColor: '#f0fdf4', borderColor: '#bbf7d0', cursor: 'pointer', height: '100%' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
+              <div>
+                <div style={{ color: '#166534', fontSize: '0.85rem', fontWeight: '600', marginBottom: '4px' }}>Buyer Contact Requests</div>
+                <div style={{ fontSize: '1.75rem', fontWeight: '700', color: '#15803d' }}>{pendingRequestsCount} Pending</div>
+              </div>
+              <div style={{ padding: '10px', backgroundColor: '#dcfce7', borderRadius: '8px', color: '#16a34a' }}><PhoneCall size={20} /></div>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.85rem', color: '#15803d', fontWeight: '600' }}>
+              Review & Approve Owner Access →
+            </div>
+          </Card>
+        </Link>
       </div>
 
       {/* Quick Actions */}
       <div>
         <h2 style={{ fontSize: '1.1rem', fontWeight: '600', color: '#0f172a', marginBottom: '16px' }}>Quick Actions</h2>
         <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+          <Link to="/admin/contact-requests" style={{ textDecoration: 'none' }}>
+            <button style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '10px 16px', borderRadius: '8px', border: 'none', backgroundColor: '#0284c7', color: '#fff', fontWeight: 600, fontSize: '0.9rem', cursor: 'pointer' }}>
+              <PhoneCall size={16} /> Review Contact Requests ({pendingRequestsCount})
+            </button>
+          </Link>
           {[
             { label: 'Add Property', icon: <Plus size={16}/>, primary: true },
             { label: 'Add User', icon: <Users size={16}/> },

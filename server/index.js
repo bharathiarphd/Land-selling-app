@@ -246,6 +246,31 @@ const complaintSchema = new mongoose.Schema({
 });
 const Complaint = mongoose.model('Complaint', complaintSchema);
 
+const contactRequestSchema = new mongoose.Schema({
+  id: { type: String, unique: true },
+  propertyId: { type: String, required: true },
+  propertyTitle: { type: String, required: true },
+  propertyPrice: { type: Number },
+  propertyLocation: { type: String },
+  propertyImage: { type: String },
+  buyerId: { type: String, required: true },
+  buyerName: { type: String, required: true },
+  buyerPhone: { type: String, required: true },
+  buyerEmail: { type: String },
+  buyerUserId: { type: String },
+  message: { type: String },
+  sellerId: { type: String },
+  sellerName: { type: String },
+  sellerPhone: { type: String },
+  sellerType: { type: String },
+  status: { type: String, enum: ['Pending', 'Approved', 'Rejected'], default: 'Pending' },
+  adminNotes: { type: String },
+  createdAt: { type: Date, default: Date.now },
+  reviewedAt: { type: Date },
+  reviewedBy: { type: String }
+});
+const ContactRequest = mongoose.model('ContactRequest', contactRequestSchema);
+
 // --- Middleware ---
 const verifyToken = async (req, res, next) => {
   const authHeader = req.headers.authorization;
@@ -1426,6 +1451,87 @@ app.get('/api/admin/dashboard-stats', verifyToken, requireAdmin, async (req, res
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
+  }
+});
+
+// --- Contact Requests API (Buyer Purchase Interest & Admin Approval) ---
+
+// Get all contact requests
+app.get('/api/contact-requests', async (req, res) => {
+  try {
+    if (isMongoConnected()) {
+      const items = await ContactRequest.find().sort({ createdAt: -1 });
+      if (items && items.length > 0) return res.json(items);
+    }
+    const list = localDb.contactRequests || [];
+    res.json(list);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Create new contact request
+app.post('/api/contact-requests', async (req, res) => {
+  try {
+    const data = req.body;
+    if (!data.id) {
+      data.id = `req_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+    }
+    data.createdAt = data.createdAt || new Date().toISOString();
+    data.status = data.status || 'Pending';
+
+    if (isMongoConnected()) {
+      try {
+        const item = new ContactRequest(data);
+        await item.save();
+      } catch (_) {}
+    }
+
+    if (!localDb.contactRequests) localDb.contactRequests = [];
+    const existingIndex = localDb.contactRequests.findIndex(
+      r => r.id === data.id || (r.buyerId === data.buyerId && r.propertyId === data.propertyId)
+    );
+    if (existingIndex >= 0) {
+      localDb.contactRequests[existingIndex] = data;
+    } else {
+      localDb.contactRequests.unshift(data);
+    }
+    saveLocalDb(localDb);
+
+    res.json({ success: true, contactRequest: data });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Update contact request status (Approve / Reject)
+app.patch('/api/contact-requests/:id/status', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status, adminNotes, reviewedBy } = req.body;
+
+    if (isMongoConnected()) {
+      try {
+        await ContactRequest.findOneAndUpdate(
+          { id },
+          { status, adminNotes, reviewedBy, reviewedAt: new Date() }
+        );
+      } catch (_) {}
+    }
+
+    if (!localDb.contactRequests) localDb.contactRequests = [];
+    const reqItem = localDb.contactRequests.find(r => r.id === id);
+    if (reqItem) {
+      reqItem.status = status;
+      if (adminNotes !== undefined) reqItem.adminNotes = adminNotes;
+      if (reviewedBy !== undefined) reqItem.reviewedBy = reviewedBy;
+      reqItem.reviewedAt = new Date().toISOString();
+      saveLocalDb(localDb);
+    }
+
+    res.json({ success: true, contactRequest: reqItem });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 
