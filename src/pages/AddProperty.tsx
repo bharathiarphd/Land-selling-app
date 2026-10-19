@@ -14,14 +14,77 @@ import { useLanguage } from '../context/LanguageContext';
 
 const DRAFT_KEY = 'landSellingApp_propertyDraft';
 
+export const POPULAR_TAMILNADU_CITIES = [
+  'Chennai',
+  'Tindivanam',
+  'Villupuram',
+  'Coimbatore',
+  'Madurai',
+  'Kanchipuram',
+  'Salem',
+  'Tiruchirappalli',
+  'Tirunelveli',
+  'Erode',
+  'Vellore',
+  'Thanjavur',
+  'Dindigul',
+  'Tiruppur',
+  'Gingee',
+  'Hosur',
+  'Karur',
+  'Nagercoil',
+  'Cuddalore',
+  'Pollachi',
+  'Chengalpattu',
+  'Kumbakonam',
+  'Pudukkottai',
+  'Neyveli'
+];
+
+export const CITY_TO_DISTRICT: Record<string, string> = {
+  'chennai': 'Chennai',
+  'tindivanam': 'Villupuram',
+  'villupuram': 'Villupuram',
+  'gingee': 'Villupuram',
+  'coimbatore': 'Coimbatore',
+  'pollachi': 'Coimbatore',
+  'madurai': 'Madurai',
+  'kanchipuram': 'Kanchipuram',
+  'kancheepuram': 'Kanchipuram',
+  'sriperumbudur': 'Kanchipuram',
+  'salem': 'Salem',
+  'tiruchirappalli': 'Tiruchirappalli',
+  'trichy': 'Tiruchirappalli',
+  'tirunelveli': 'Tirunelveli',
+  'erode': 'Erode',
+  'vellore': 'Vellore',
+  'thanjavur': 'Thanjavur',
+  'dindigul': 'Dindigul',
+  'tiruppur': 'Tiruppur',
+  'hosur': 'Krishnagiri',
+  'karur': 'Karur',
+  'nagercoil': 'Kanniyakumari',
+  'cuddalore': 'Cuddalore',
+  'chengalpattu': 'Chengalpattu',
+  'vandalur': 'Chengalpattu',
+  'sholinganallur': 'Chennai',
+  'tambaram': 'Chengalpattu',
+  'kumbakonam': 'Thanjavur',
+  'pudukkottai': 'Pudukkottai',
+  'neyveli': 'Cuddalore'
+};
+
 interface PropertyFormData {
   title: string;
   propertyType: string;
-  price: number;
+  sqFtRate: number; // Rate per Sq.Ft (₹)
+  totalSquareFeet: number; // Total Square Feet
+  price: number; // Amount (₹)
   area: number;
   areaUnit: string;
   location: {
     state: string;
+    city: string; // City / Town
     district: string;
     taluk: string;
     village: string;
@@ -56,12 +119,15 @@ export default function AddProperty() {
   
   const [formData, setFormData] = useState<PropertyFormData>({
     title: '',
-    propertyType: 'Plot', // using one from Phase 1 defaults
+    propertyType: 'Plot',
+    sqFtRate: 0,
+    totalSquareFeet: 0,
     price: 0,
     area: 0,
     areaUnit: 'Sq.Ft',
     location: {
       state: 'Tamil Nadu',
+      city: '',
       district: '',
       taluk: '',
       village: '',
@@ -93,19 +159,30 @@ export default function AddProperty() {
       setHasDraftPrompt(false);
       const existing = getPropertyById(editId);
       if (existing) {
+        const sqftTotal = existing.totalSquareFeet || (
+          existing.areaUnit === 'Cent' ? Math.round(existing.area * 435.6) :
+          existing.areaUnit === 'Acre' ? Math.round(existing.area * 43560) :
+          existing.areaUnit === 'Ground' ? Math.round(existing.area * 2400) :
+          existing.area
+        );
+        const rate = existing.sqFtRate || (sqftTotal > 0 ? Math.round(existing.price / sqftTotal) : 0);
+
         setFormData({
           title: existing.title,
           propertyType: existing.propertyType,
+          sqFtRate: rate,
+          totalSquareFeet: sqftTotal,
           price: existing.price,
           area: existing.area,
           areaUnit: existing.areaUnit,
           location: {
             state: 'Tamil Nadu',
+            city: existing.city || existing.district || '',
             district: existing.district,
             taluk: existing.taluk,
             village: existing.village,
             address: existing.location,
-            pincode: ''
+            pincode: existing.pincode || ''
           },
           details: {
             facing: existing.facing === 'Any' ? '' : existing.facing,
@@ -150,20 +227,102 @@ export default function AddProperty() {
     setStep(s => Math.max(s - 1, 1));
   };
 
+  const handleSqFtRateChange = (valStr: string) => {
+    const rate = valStr === '' ? 0 : Number(valStr);
+    setFormData(prev => {
+      let price = prev.price;
+      if (prev.totalSquareFeet > 0 && rate > 0) {
+        price = Math.round(rate * prev.totalSquareFeet);
+      }
+      return {
+        ...prev,
+        sqFtRate: rate,
+        price
+      };
+    });
+    setErrors(prev => ({ ...prev, sqFtRate: '', price: '' }));
+  };
+
+  const handleTotalSqFtChange = (valStr: string) => {
+    const totalSqFt = valStr === '' ? 0 : Number(valStr);
+    setFormData(prev => {
+      let price = prev.price;
+      let rate = prev.sqFtRate;
+      let area = prev.areaUnit === 'Sq.Ft' ? totalSqFt : prev.area;
+      if (prev.areaUnit === 'Cent') area = totalSqFt > 0 ? +(totalSqFt / 435.6).toFixed(2) : 0;
+      else if (prev.areaUnit === 'Acre') area = totalSqFt > 0 ? +(totalSqFt / 43560).toFixed(3) : 0;
+      else if (prev.areaUnit === 'Ground') area = totalSqFt > 0 ? +(totalSqFt / 2400).toFixed(2) : 0;
+
+      if (rate > 0 && totalSqFt > 0) {
+        price = Math.round(rate * totalSqFt);
+      } else if (price > 0 && totalSqFt > 0 && rate <= 0) {
+        rate = Math.round(price / totalSqFt);
+      }
+      return {
+        ...prev,
+        totalSquareFeet: totalSqFt,
+        price,
+        sqFtRate: rate,
+        area: area || totalSqFt
+      };
+    });
+    setErrors(prev => ({ ...prev, totalSquareFeet: '', price: '', sqFtRate: '', area: '' }));
+  };
+
+  const handleAmountChange = (valStr: string) => {
+    const price = valStr === '' ? 0 : Number(valStr);
+    setFormData(prev => {
+      let rate = prev.sqFtRate;
+      let totalSqFt = prev.totalSquareFeet;
+      if (totalSqFt > 0 && price > 0) {
+        rate = Math.round(price / totalSqFt);
+      } else if (rate > 0 && price > 0 && totalSqFt <= 0) {
+        totalSqFt = Math.round(price / rate);
+      }
+      return {
+        ...prev,
+        price,
+        sqFtRate: rate,
+        totalSquareFeet: totalSqFt,
+        area: prev.areaUnit === 'Sq.Ft' && totalSqFt > 0 ? totalSqFt : prev.area
+      };
+    });
+    setErrors(prev => ({ ...prev, price: '', sqFtRate: '' }));
+  };
+
+  const handleCityChange = (cityName: string) => {
+    const lower = cityName.trim().toLowerCase();
+    const matchedDistrict = CITY_TO_DISTRICT[lower];
+    setFormData(prev => ({
+      ...prev,
+      location: {
+        ...prev.location,
+        city: cityName,
+        district: matchedDistrict || prev.location.district || cityName,
+        village: prev.location.village || cityName
+      }
+    }));
+    setErrors(prev => ({ ...prev, city: '', district: '', village: '' }));
+  };
+
   const validateStep = (currentStep: number) => {
     const newErrors: Record<string, string> = {};
     
     if (currentStep === 1) {
       if (!formData.title?.trim()) newErrors.title = language === 'ta' ? 'தலைப்பு தேவை' : 'Title is required';
       if (!formData.propertyType) newErrors.propertyType = language === 'ta' ? 'சொத்து வகை தேவை' : 'Property type is required';
-      if (!formData.price || formData.price <= 0) newErrors.price = language === 'ta' ? 'சரியான விலை தேவை' : 'Valid price is required';
+      if (!formData.sqFtRate || formData.sqFtRate <= 0) newErrors.sqFtRate = language === 'ta' ? 'சதுர அடி விலை தேவை' : 'Square feet rate is required';
+      if (!formData.totalSquareFeet || formData.totalSquareFeet <= 0) newErrors.totalSquareFeet = language === 'ta' ? 'மொத்த சதுர அடி தேவை' : 'Total square feet is required';
+      if (!formData.price || formData.price <= 0) newErrors.price = language === 'ta' ? 'சரியான தொகை தேவை' : 'Valid amount is required';
       if (!formData.area || formData.area <= 0) newErrors.area = language === 'ta' ? 'சரியான பரப்பளவு தேவை' : 'Valid area is required';
       if (!formData.areaUnit) newErrors.areaUnit = language === 'ta' ? 'அலகு தேவை' : 'Unit is required';
     } else if (currentStep === 2) {
       if (!formData.location.state) newErrors.state = language === 'ta' ? 'மாநிலம் தேவை' : 'State is required';
-      if (!formData.location.district) newErrors.district = language === 'ta' ? 'மாவட்டம் தேவை' : 'District is required';
-      if (!formData.location.taluk) newErrors.taluk = language === 'ta' ? 'தாலுகா தேவை' : 'Taluk is required';
-      if (!formData.location.village) newErrors.village = language === 'ta' ? 'கிராமம் / நகரம் தேவை' : 'Village/Town is required';
+      if (!formData.location.city?.trim() && !formData.location.district?.trim()) {
+        newErrors.city = language === 'ta' ? 'நகரம் அல்லது மாவட்டம் தேவை' : 'City or District is required';
+      }
+      if (!formData.location.district?.trim()) newErrors.district = language === 'ta' ? 'மாவட்டம் தேவை' : 'District is required';
+      if (!formData.location.village?.trim() && !formData.location.city?.trim()) newErrors.village = language === 'ta' ? 'கிராமம் / நகரம் தேவை' : 'Village/Town is required';
       if (formData.location.pincode && !/^\d{6}$/.test(formData.location.pincode)) {
         newErrors.pincode = language === 'ta' ? '6-இலக்க சரியான அஞ்சல் குறியீடாக இருக்க வேண்டும்' : 'Must be a 6-digit valid pincode';
       }
@@ -192,12 +351,16 @@ export default function AddProperty() {
         description: formData.description,
         propertyType: formData.propertyType as any,
         price: formData.price,
-        area: formData.area,
+        sqFtRate: formData.sqFtRate,
+        totalSquareFeet: formData.totalSquareFeet,
+        area: formData.area || formData.totalSquareFeet,
         areaUnit: formData.areaUnit as any,
-        location: formData.location.address || formData.location.village,
-        district: formData.location.district,
+        location: formData.location.address || formData.location.city || formData.location.village,
+        city: formData.location.city || formData.location.district,
+        district: formData.location.district || formData.location.city,
         taluk: formData.location.taluk,
-        village: formData.location.village,
+        village: formData.location.village || formData.location.city,
+        pincode: formData.location.pincode,
         latitude: formData.location.latitude,
         longitude: formData.location.longitude,
         images: formData.images,
@@ -285,8 +448,8 @@ export default function AddProperty() {
           {!editId && (
             <Button variant="outline" onClick={() => {
               setFormData({ 
-                title: '', propertyType: 'Plot', price: 0, area: 0, areaUnit: 'Sq.Ft', 
-                location: { state: 'Tamil Nadu', district: '', taluk: '', village: '', address: '', pincode: '' },
+                title: '', propertyType: 'Plot', sqFtRate: 0, totalSquareFeet: 0, price: 0, area: 0, areaUnit: 'Sq.Ft', 
+                location: { state: 'Tamil Nadu', city: '', district: '', taluk: '', village: '', address: '', pincode: '' },
                 details: { facing: '', roadWidth: '', roadAccess: '', electricity: '', water: '', corner: '', approval: '', ownership: '' },
                 description: '', images: [] 
               });
@@ -331,54 +494,133 @@ export default function AddProperty() {
       <div className={styles.formCard}>
         {step === 1 && (
           <div>
-            <h2 className={styles.sectionTitle}>Basic Information</h2>
+            <h2 className={styles.sectionTitle}>{language === 'ta' ? 'அடிப்படை விவரங்கள்' : 'Basic Information'}</h2>
             <div className={styles.grid}>
               <div style={{ gridColumn: '1 / -1' }}>
                 <Input 
-                  label="Property Title" 
-                  placeholder="e.g. Residential Land for Sale in Tindivanam"
+                  label={language === 'ta' ? 'சொத்து தலைப்பு' : 'Property Title'} 
+                  placeholder={language === 'ta' ? 'எ.கா. குடியிருப்பு நிலம் விற்பனைக்கு - திண்டிவனம்' : 'e.g. Residential Land for Sale in Tindivanam'}
                   value={formData.title}
                   onChange={e => { setFormData({...formData, title: e.target.value}); setErrors({...errors, title: ''}); }}
                   error={errors.title}
                 />
               </div>
+
+              {/* 1. Property Type */}
               <Select 
-                label="Property Type"
+                label={language === 'ta' ? 'சொத்து வகை' : 'Property Type'}
                 value={formData.propertyType}
                 onChange={e => { setFormData({...formData, propertyType: e.target.value}); setErrors({...errors, propertyType: ''}); }}
                 options={[
-                  { value: 'Plot', label: 'Plot' },
-                  { value: 'Agricultural Land', label: 'Agricultural Land' },
-                  { value: 'Commercial Land', label: 'Commercial Land' },
-                  { value: 'Farm Land', label: 'Farm Land' },
+                  { value: 'Plot', label: language === 'ta' ? 'மனை (Plot)' : 'Plot' },
+                  { value: 'Residential Plot', label: language === 'ta' ? 'குடியிருப்பு மனை (Residential Plot)' : 'Residential Plot' },
+                  { value: 'Residential Land', label: language === 'ta' ? 'குடியிருப்பு நிலம் (Residential Land)' : 'Residential Land' },
+                  { value: 'Agricultural Land', label: language === 'ta' ? 'விவசாய நிலம் (Agricultural Land)' : 'Agricultural Land' },
+                  { value: 'Farm Land', label: language === 'ta' ? 'பண்ணை நிலம் (Farm Land)' : 'Farm Land' },
+                  { value: 'Commercial Land', label: language === 'ta' ? 'வணிக நிலம் (Commercial Land)' : 'Commercial Land' },
                 ]}
                 error={errors.propertyType}
               />
+
+              {/* 2. Square Feet Rate */}
               <Input 
-                label="Price (₹)" 
+                label={language === 'ta' ? 'சதுர அடி விலை (₹/sq.ft)' : 'Square Feet Rate (₹/sq.ft)'} 
                 type="number"
-                placeholder="0"
+                placeholder="e.g. 1500"
+                value={formData.sqFtRate || ''}
+                onChange={e => handleSqFtRateChange(e.target.value)}
+                error={errors.sqFtRate}
+              />
+
+              {/* 3. Total Square Feet */}
+              <Input 
+                label={language === 'ta' ? 'மொத்த சதுர அடி (sq.ft)' : 'Total Square Feet (sq.ft)'} 
+                type="number"
+                placeholder="e.g. 1200"
+                value={formData.totalSquareFeet || ''}
+                onChange={e => handleTotalSqFtChange(e.target.value)}
+                error={errors.totalSquareFeet}
+              />
+
+              {/* 4. Amount */}
+              <Input 
+                label={language === 'ta' ? 'மொத்த தொகை (Amount - ₹)' : 'Amount (₹)'} 
+                type="number"
+                placeholder="e.g. 1800000"
                 value={formData.price || ''}
-                onChange={e => { setFormData({...formData, price: Number(e.target.value)}); setErrors({...errors, price: ''}); }}
+                onChange={e => handleAmountChange(e.target.value)}
                 error={errors.price}
               />
+
+              {/* Live Calculation Display */}
+              <div style={{
+                gridColumn: '1 / -1',
+                padding: 'var(--spacing-3) var(--spacing-4)',
+                backgroundColor: 'rgba(2, 132, 199, 0.08)',
+                border: '1.5px solid rgba(2, 132, 199, 0.25)',
+                borderRadius: 'var(--radius-md)',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '4px'
+              }}>
+                <div style={{ fontWeight: 600, color: 'var(--color-primary-dark)', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                  <span>📐 {language === 'ta' ? 'விலை கணக்கீடு:' : 'Price & Area Calculation:'}</span>
+                  <span style={{ fontWeight: 700 }}>
+                    ₹{Number(formData.sqFtRate || 0).toLocaleString('en-IN')} / sq.ft × {Number(formData.totalSquareFeet || 0).toLocaleString('en-IN')} sq.ft = ₹{Number(formData.price || 0).toLocaleString('en-IN')}
+                  </span>
+                </div>
+                {Number(formData.totalSquareFeet || 0) > 0 && (
+                  <div style={{ fontSize: '0.85rem', color: 'var(--color-text-secondary)' }}>
+                    ≈ {(Number(formData.totalSquareFeet) / 435.6).toFixed(2)} Cent | {(Number(formData.totalSquareFeet) / 43560).toFixed(3)} Acre | {(Number(formData.totalSquareFeet) / 2400).toFixed(2)} Ground
+                  </div>
+                )}
+              </div>
+
+              {/* Synchronized Area & Area Unit */}
               <Input 
-                label="Area" 
+                label={language === 'ta' ? 'காண்பிக்கப்படும் பரப்பளவு' : 'Displayed Area'} 
                 type="number"
                 placeholder="0"
                 value={formData.area || ''}
-                onChange={e => { setFormData({...formData, area: Number(e.target.value)}); setErrors({...errors, area: ''}); }}
+                onChange={e => {
+                  const val = Number(e.target.value);
+                  setFormData(prev => {
+                    let totalSq = prev.totalSquareFeet;
+                    if (prev.areaUnit === 'Sq.Ft') totalSq = val;
+                    else if (prev.areaUnit === 'Cent') totalSq = Math.round(val * 435.6);
+                    else if (prev.areaUnit === 'Acre') totalSq = Math.round(val * 43560);
+                    else if (prev.areaUnit === 'Ground') totalSq = Math.round(val * 2400);
+
+                    const price = prev.sqFtRate > 0 && totalSq > 0 ? Math.round(prev.sqFtRate * totalSq) : prev.price;
+                    return { ...prev, area: val, totalSquareFeet: totalSq, price };
+                  });
+                  setErrors({...errors, area: ''});
+                }}
                 error={errors.area}
               />
               <Select 
-                label="Area Unit"
+                label={language === 'ta' ? 'பரப்பளவு அலகு' : 'Area Unit'}
                 value={formData.areaUnit}
-                onChange={e => { setFormData({...formData, areaUnit: e.target.value}); setErrors({...errors, areaUnit: ''}); }}
+                onChange={e => {
+                  const unit = e.target.value;
+                  setFormData(prev => {
+                    let area = prev.area;
+                    if (prev.totalSquareFeet > 0) {
+                      if (unit === 'Sq.Ft') area = prev.totalSquareFeet;
+                      else if (unit === 'Cent') area = +(prev.totalSquareFeet / 435.6).toFixed(2);
+                      else if (unit === 'Acre') area = +(prev.totalSquareFeet / 43560).toFixed(3);
+                      else if (unit === 'Ground') area = +(prev.totalSquareFeet / 2400).toFixed(2);
+                    }
+                    return { ...prev, areaUnit: unit, area };
+                  });
+                  setErrors({...errors, areaUnit: ''});
+                }}
                 options={[
-                  { value: 'Sq.Ft', label: 'Sq.Ft' },
-                  { value: 'Cent', label: 'Cent' },
-                  { value: 'Acre', label: 'Acre' },
-                  { value: 'Sq.M', label: 'Sq.M' },
+                  { value: 'Sq.Ft', label: 'Sq.Ft (சதுர அடி)' },
+                  { value: 'Cent', label: 'Cent (சென்ட்)' },
+                  { value: 'Acre', label: 'Acre (ஏக்கர்)' },
+                  { value: 'Ground', label: 'Ground (கிரவுண்ட்)' },
+                  { value: 'Sq.M', label: 'Sq.M (சதுர மீட்டர்)' },
                 ]}
                 error={errors.areaUnit}
               />
@@ -388,45 +630,88 @@ export default function AddProperty() {
 
         {step === 2 && (
           <div>
-            <h2 className={styles.sectionTitle}>Location Information</h2>
+            <h2 className={styles.sectionTitle}>{language === 'ta' ? 'இட விவரங்கள்' : 'Location Information'}</h2>
             <div className={styles.grid}>
+              {/* City / Town with typeahead and popular city suggestions */}
+              <div style={{ gridColumn: '1 / -1' }}>
+                <Input 
+                  label={language === 'ta' ? 'நகரம் (City / Town)' : 'City / Town'} 
+                  placeholder={language === 'ta' ? 'நகரத்தின் பெயரை தட்டச்சு செய்க (எ.கா. Chennai, Tindivanam, Coimbatore)' : 'Type the name of the city (e.g. Chennai, Tindivanam, Coimbatore)'}
+                  value={formData.location.city}
+                  list="popular-cities-datalist"
+                  onChange={e => handleCityChange(e.target.value)}
+                  error={errors.city}
+                />
+                <datalist id="popular-cities-datalist">
+                  {POPULAR_TAMILNADU_CITIES.map(c => (
+                    <option key={c} value={c} />
+                  ))}
+                </datalist>
+
+                {/* Popular City Shortlinks / Quick Select Chips */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', marginTop: '6px' }}>
+                  <span style={{ fontSize: '0.8rem', color: 'var(--color-text-secondary)', fontWeight: 500 }}>
+                    {language === 'ta' ? 'பிரபல நகரங்கள்:' : 'Popular Cities:'}
+                  </span>
+                  {['Chennai', 'Tindivanam', 'Villupuram', 'Coimbatore', 'Madurai', 'Kanchipuram', 'Salem', 'Gingee'].map(cityName => (
+                    <button
+                      key={cityName}
+                      type="button"
+                      onClick={() => handleCityChange(cityName)}
+                      style={{
+                        padding: '2px 8px',
+                        borderRadius: '12px',
+                        border: formData.location.city.toLowerCase() === cityName.toLowerCase() ? '1px solid var(--color-primary)' : '1px solid var(--color-border)',
+                        backgroundColor: formData.location.city.toLowerCase() === cityName.toLowerCase() ? 'var(--color-primary-light)' : 'var(--color-surface)',
+                        color: formData.location.city.toLowerCase() === cityName.toLowerCase() ? 'var(--color-primary-dark)' : 'var(--color-text-primary)',
+                        fontSize: '0.78rem',
+                        cursor: 'pointer',
+                        fontWeight: formData.location.city.toLowerCase() === cityName.toLowerCase() ? 600 : 400
+                      }}
+                    >
+                      {cityName}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               <Input 
-                label="State" 
-                value={formData.location.state}
-                onChange={e => { setFormData({...formData, location: {...formData.location, state: e.target.value}}); setErrors({...errors, state: ''}); }}
-                error={errors.state}
-              />
-              <Input 
-                label="District" 
+                label={language === 'ta' ? 'மாவட்டம் (District)' : 'District'} 
                 placeholder="e.g. Villupuram"
                 value={formData.location.district}
                 onChange={e => { setFormData({...formData, location: {...formData.location, district: e.target.value}}); setErrors({...errors, district: ''}); }}
                 error={errors.district}
               />
               <Input 
-                label="Taluk" 
+                label={language === 'ta' ? 'தாலுகா (Taluk)' : 'Taluk'} 
                 placeholder="e.g. Tindivanam"
                 value={formData.location.taluk}
                 onChange={e => { setFormData({...formData, location: {...formData.location, taluk: e.target.value}}); setErrors({...errors, taluk: ''}); }}
                 error={errors.taluk}
               />
               <Input 
-                label="Village / Town" 
-                placeholder="Enter village or town"
+                label={language === 'ta' ? 'கிராமம் / பகுதி (Village / Area)' : 'Village / Area'} 
+                placeholder="Enter village or area"
                 value={formData.location.village}
                 onChange={e => { setFormData({...formData, location: {...formData.location, village: e.target.value}}); setErrors({...errors, village: ''}); }}
                 error={errors.village}
               />
+              <Input 
+                label={language === 'ta' ? 'மாநிலம் (State)' : 'State'} 
+                value={formData.location.state}
+                onChange={e => { setFormData({...formData, location: {...formData.location, state: e.target.value}}); setErrors({...errors, state: ''}); }}
+                error={errors.state}
+              />
               <div style={{ gridColumn: '1 / -1' }}>
                 <Input 
-                  label="Address" 
+                  label={language === 'ta' ? 'முகவரி (Address)' : 'Address'} 
                   placeholder="Street or Area address"
                   value={formData.location.address}
                   onChange={e => setFormData({...formData, location: {...formData.location, address: e.target.value}})}
                 />
               </div>
               <Input 
-                label="Pincode" 
+                label={language === 'ta' ? 'அஞ்சல் குறியீடு (Pincode)' : 'Pincode'} 
                 placeholder="6 digit pincode"
                 maxLength={6}
                 value={formData.location.pincode}
@@ -647,16 +932,29 @@ export default function AddProperty() {
                   </div>
                   <div>
                     <h3 style={{ fontSize: 'var(--font-size-xl)' }}>{formData.title}</h3>
-                    <p style={{ color: 'var(--color-text-secondary)', marginBottom: 'var(--spacing-2)' }}>{formData.location.village}, {formData.location.district}</p>
-                    <p style={{ fontSize: 'var(--font-size-xl)', fontWeight: 'var(--font-weight-bold)', color: 'var(--color-primary)' }}>
-                      ₹{formData.price?.toLocaleString('en-IN')}
+                    <p style={{ color: 'var(--color-text-secondary)', marginBottom: 'var(--spacing-2)' }}>
+                      {formData.location.city ? `${formData.location.city}, ` : ''}{formData.location.village ? `${formData.location.village}, ` : ''}{formData.location.district}
                     </p>
+                    <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
+                      <p style={{ fontSize: 'var(--font-size-xl)', fontWeight: 'var(--font-weight-bold)', color: 'var(--color-primary)' }}>
+                        ₹{formData.price?.toLocaleString('en-IN')}
+                      </p>
+                      {formData.sqFtRate ? (
+                        <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-text-secondary)' }}>
+                          (₹{formData.sqFtRate?.toLocaleString('en-IN')} / sq.ft)
+                        </span>
+                      ) : null}
+                    </div>
                   </div>
                 </div>
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--spacing-2)', fontSize: 'var(--font-size-sm)', marginBottom: 'var(--spacing-4)' }}>
                   <div><strong>Type:</strong> {formData.propertyType}</div>
+                  <div><strong>Rate:</strong> ₹{formData.sqFtRate?.toLocaleString('en-IN') || 0} / sq.ft</div>
+                  <div><strong>Total Sq.Ft:</strong> {formData.totalSquareFeet?.toLocaleString('en-IN') || formData.area} sq.ft</div>
                   <div><strong>Area:</strong> {formData.area} {formData.areaUnit}</div>
+                  <div><strong>City:</strong> {formData.location.city || formData.location.district || '-'}</div>
+                  <div><strong>District:</strong> {formData.location.district || '-'}</div>
                   <div><strong>Facing:</strong> {formData.details.facing || '-'}</div>
                   <div><strong>Approval:</strong> {formData.details.approval || '-'}</div>
                 </div>

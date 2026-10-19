@@ -138,11 +138,13 @@ export default function PropertyDetail() {
   };
 
   // Determine Price per sq.ft if we have valid sq.ft area
-  let pricePerSqFt: number | null = null;
-  if (property.areaUnit === 'Sq.Ft' && property.area > 0) {
-    pricePerSqFt = Math.round(property.price / property.area);
-  } else if (property.areaUnit === 'Cent' && property.area > 0) {
-    pricePerSqFt = Math.round(property.price / (property.area * 435.6));
+  let pricePerSqFt: number | null = property.sqFtRate || null;
+  if (!pricePerSqFt) {
+    if (property.areaUnit === 'Sq.Ft' && property.area > 0) {
+      pricePerSqFt = Math.round(property.price / property.area);
+    } else if (property.areaUnit === 'Cent' && property.area > 0) {
+      pricePerSqFt = Math.round(property.price / (property.area * 435.6));
+    }
   }
 
   return (
@@ -182,7 +184,7 @@ export default function PropertyDetail() {
             </div>
             <div className={styles.propertyLocation}>
               <MapPin size={16} />
-              {property.location}, {property.district}, Tamil Nadu
+              {property.city && property.city !== property.district ? `${property.city}, ` : ''}{property.location}, {property.district}, Tamil Nadu
             </div>
           </div>
 
@@ -284,7 +286,10 @@ export default function PropertyDetail() {
                 <Maximize className={styles.summaryIcon} size={20} />
                 <div>
                   <div className={styles.summaryLabel}>{t('common.area')}</div>
-                  <div className={styles.summaryValue}>{property.area} {property.areaUnit}</div>
+                  <div className={styles.summaryValue}>
+                    {property.totalSquareFeet ? `${property.totalSquareFeet.toLocaleString('en-IN')} Sq.Ft` : `${property.area} ${property.areaUnit}`}
+                    {property.areaUnit !== 'Sq.Ft' && ` (${property.area} ${property.areaUnit})`}
+                  </div>
                 </div>
               </div>
               <div className={styles.summaryItem}>

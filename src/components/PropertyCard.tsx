@@ -92,7 +92,9 @@ export function PropertyCard({ property, isFavorite = false, onFavoriteClick }: 
               <span className={styles.iconBox}>
                 <MapPin size={13} />
               </span>
-              <span>{property.location}, {property.district}</span>
+              <span>
+                {property.city && property.city !== property.district ? `${property.city}, ` : ''}{property.location}, {property.district}
+              </span>
             </div>
           </div>
 
@@ -105,6 +107,11 @@ export function PropertyCard({ property, isFavorite = false, onFavoriteClick }: 
             <div className="price-text" style={{ fontSize: '1.15rem' }}>
               {formatPrice(property.price)}
             </div>
+            {property.sqFtRate ? (
+              <span style={{ fontSize: '0.74rem', color: 'var(--color-text-secondary)', display: 'block', textAlign: 'right' }}>
+                ₹{property.sqFtRate.toLocaleString('en-IN')}/sq.ft
+              </span>
+            ) : null}
             {isReduced && reducedDifference > 0 && (
               <span className={styles.reducedBadgeInline}>
                 Save ₹{reducedDifference.toLocaleString('en-IN')}

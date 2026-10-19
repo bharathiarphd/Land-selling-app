@@ -41,6 +41,12 @@ export const ActiveFilterChips: React.FC<ActiveFilterChipsProps> = ({ filters, r
         {resultCount} {resultCount === 1 ? (language === 'ta' ? 'சொத்து கண்டறியப்பட்டது' : 'Property Found') : (language === 'ta' ? 'சொத்துகள் கண்டறியப்பட்டன' : 'Properties Found')}
       </div>
       
+      {filters.city && (
+        <div className={styles.activeChip}>
+          {language === 'ta' ? 'நகரம்' : 'City'}: {filters.city} <button className={styles.removeChipBtn} onClick={() => removeFilter('city')}><X size={14} /></button>
+        </div>
+      )}
+      
       {filters.district && (
         <div className={styles.activeChip}>
           {language === 'ta' && filters.district === 'Chennai' ? 'சென்னை' : language === 'ta' && filters.district === 'Villupuram' ? 'விழுப்புரம்' : language === 'ta' && filters.district === 'Tindivanam' ? 'திண்டிவனம்' : filters.district} <button className={styles.removeChipBtn} onClick={() => removeFilter('district')}><X size={14} /></button>

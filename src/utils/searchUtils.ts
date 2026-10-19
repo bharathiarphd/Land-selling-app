@@ -3,6 +3,7 @@ import type { Property } from '../data/mockProperties';
 export interface FilterOptions {
   keyword?: string;
   state?: string;
+  city?: string;
   district?: string;
   taluk?: string;
   village?: string;
@@ -130,6 +131,18 @@ export const filterProperties = (properties: Property[], filters: FilterOptions)
     const pTypes = activeFilters.propertyType || (activeFilters.type && activeFilters.type !== 'All Properties' ? [activeFilters.type] : []);
     if (pTypes.length > 0) {
       if (!pTypes.includes(p.propertyType) && !pTypes.includes('All Properties')) return false;
+    }
+
+    if (activeFilters.city && activeFilters.city !== 'All Cities') {
+      const c = activeFilters.city.toLowerCase().trim();
+      const matchCity = (
+        (p.city && p.city.toLowerCase().includes(c)) ||
+        (p.district && p.district.toLowerCase().includes(c)) ||
+        (p.location && p.location.toLowerCase().includes(c)) ||
+        (p.village && p.village.toLowerCase().includes(c)) ||
+        (p.taluk && p.taluk.toLowerCase().includes(c))
+      );
+      if (!matchCity) return false;
     }
 
     if (activeFilters.district && activeFilters.district !== 'All Districts') {

@@ -175,6 +175,51 @@ export default function Search() {
           </div>
         </div>
 
+        {/* Popular Cities Shortlinks in Search */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', overflowX: 'auto', padding: '6px 0 10px', marginTop: '4px' }}>
+          <span style={{ fontSize: '0.82rem', color: 'var(--color-text-secondary)', fontWeight: 600, whiteSpace: 'nowrap' }}>
+            {language === 'ta' ? 'பிரபல நகரங்கள்:' : 'Popular Cities:'}
+          </span>
+          <button
+            onClick={() => updateUrlParams({ city: undefined })}
+            style={{
+              padding: '4px 12px',
+              borderRadius: '16px',
+              border: !appliedFilters.city ? '1.5px solid var(--color-primary)' : '1px solid var(--color-border)',
+              backgroundColor: !appliedFilters.city ? 'var(--color-primary)' : 'var(--color-surface)',
+              color: !appliedFilters.city ? '#ffffff' : 'var(--color-text-primary)',
+              fontSize: '0.82rem',
+              fontWeight: !appliedFilters.city ? 600 : 400,
+              cursor: 'pointer',
+              whiteSpace: 'nowrap'
+            }}
+          >
+            {language === 'ta' ? 'அனைத்தும்' : 'All'}
+          </button>
+          {['Chennai', 'Tindivanam', 'Villupuram', 'Coimbatore', 'Madurai', 'Kanchipuram', 'Salem', 'Gingee', 'Pollachi'].map(cityName => {
+            const isSelected = appliedFilters.city?.toLowerCase() === cityName.toLowerCase();
+            return (
+              <button
+                key={cityName}
+                onClick={() => updateUrlParams({ city: isSelected ? undefined : cityName })}
+                style={{
+                  padding: '4px 12px',
+                  borderRadius: '16px',
+                  border: isSelected ? '1.5px solid var(--color-primary)' : '1px solid var(--color-border)',
+                  backgroundColor: isSelected ? 'var(--color-primary)' : 'var(--color-surface)',
+                  color: isSelected ? '#ffffff' : 'var(--color-text-primary)',
+                  fontSize: '0.82rem',
+                  fontWeight: isSelected ? 600 : 400,
+                  cursor: 'pointer',
+                  whiteSpace: 'nowrap'
+                }}
+              >
+                {cityName}
+              </button>
+            );
+          })}
+        </div>
+
         <QuickFilters updateUrlParams={updateUrlParams} currentFilters={appliedFilters} />
         <ActiveFilterChips filters={appliedFilters} removeFilter={removeFilter} clearAll={clearAllFilters} resultCount={results.length} />
       </div>

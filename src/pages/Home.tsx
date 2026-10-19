@@ -23,6 +23,7 @@ export default function Home() {
   const [search, setSearch] = useState('');
   const [favorites, setFavorites] = useState<string[]>([]);
   const [properties, setProperties] = useState<Property[]>(getAllProperties());
+  const [selectedCityFilter, setSelectedCityFilter] = useState<string>('All');
 
   const isAdmin = isAdminUser(user);
 
@@ -83,26 +84,65 @@ export default function Home() {
   ];
 
   // Dynamic location counts based on live properties
-  const districtCounts = properties.reduce<Record<string, number>>((acc, p) => {
-    if (p.district) {
-      acc[p.district] = (acc[p.district] || 0) + 1;
-    }
-    return acc;
-  }, {});
+  const tamilNaduCityLabels: Record<string, string> = {
+    'Chennai': 'சென்னை',
+    'Tindivanam': 'திண்டிவனம்',
+    'Villupuram': 'விழுப்புரம்',
+    'Coimbatore': 'கோயம்புத்தூர்',
+    'Madurai': 'மதுரை',
+    'Kanchipuram': 'காஞ்சிபுரம்',
+    'Salem': 'சேலம்',
+    'Gingee': 'செஞ்சி',
+    'Tiruchirappalli': 'திருச்சிராப்பள்ளி',
+    'Pollachi': 'பொள்ளாச்சி',
+    'Tirunelveli': 'திருநெல்வேலி',
+    'Erode': 'ஈரோடு',
+    'Vellore': 'வேலூர்',
+    'Thanjavur': 'தஞ்சாவூர்',
+    'Dindigul': 'திண்டுக்கல்',
+    'Tiruppur': 'திருப்பூர்',
+    'Hosur': 'ஓசூர்',
+    'Karur': 'கரூர்',
+    'Cuddalore': 'கடலூர்'
+  };
 
-  const locations = [
-    { name: 'Chennai', label: t('language') === 'ta' ? 'சென்னை' : 'Chennai' },
-    { name: 'Tindivanam', label: t('language') === 'ta' ? 'திண்டிவனம்' : 'Tindivanam' },
-    { name: 'Villupuram', label: t('language') === 'ta' ? 'விழுப்புரம்' : 'Villupuram' },
-    { name: 'Gingee', label: t('language') === 'ta' ? 'செஞ்சி' : 'Gingee' },
-    { name: 'Kanchipuram', label: t('language') === 'ta' ? 'காஞ்சிபுரம்' : 'Kanchipuram' },
-    { name: 'Madurai', label: t('language') === 'ta' ? 'மதுரை' : 'Madurai' }
-  ];
+  const getCityPropertyCount = (cityName: string) => {
+    const q = cityName.toLowerCase().trim();
+    return properties.filter(p => {
+      const c = (p.city || '').toLowerCase().trim();
+      const d = (p.district || '').toLowerCase().trim();
+      const l = (p.location || '').toLowerCase().trim();
+      const v = (p.village || '').toLowerCase().trim();
+      return c === q || d === q || l.includes(q) || v.includes(q);
+    }).length;
+  };
 
-  const popularLocations = locations.map(loc => ({
-    ...loc,
-    count: districtCounts[loc.name] || 0
-  }));
+  const defaultCities = ['Chennai', 'Tindivanam', 'Villupuram', 'Coimbatore', 'Madurai', 'Kanchipuram', 'Salem', 'Gingee', 'Pollachi'];
+  
+  // Extract all unique cities/districts from live user properties
+  const propertyCities = Array.from(new Set(
+    properties.map(p => p.city || p.district).filter(Boolean)
+  )) as string[];
+
+  const allCityNames = Array.from(new Set([...defaultCities, ...propertyCities]));
+
+  const popularLocations = allCityNames.map(name => ({
+    name,
+    label: language === 'ta' && tamilNaduCityLabels[name] ? tamilNaduCityLabels[name] : name,
+    count: getCityPropertyCount(name)
+  })).sort((a, b) => b.count - a.count);
+
+  // Filter properties on Home page when a city shortlink pill is selected
+  const displayedProperties = selectedCityFilter === 'All'
+    ? properties
+    : properties.filter(p => {
+        const q = selectedCityFilter.toLowerCase().trim();
+        const c = (p.city || '').toLowerCase().trim();
+        const d = (p.district || '').toLowerCase().trim();
+        const l = (p.location || '').toLowerCase().trim();
+        const v = (p.village || '').toLowerCase().trim();
+        return c === q || d === q || l.includes(q) || v.includes(q);
+      });
 
   return (
     <div className="container">
@@ -216,23 +256,134 @@ export default function Home() {
         </div>
       </section>
 
-      {/* 3. Featured Properties */}
+      {/* 3. Featured & Listed Properties with Popular City Shortlinks */}
       <section className={styles.section}>
-        <div className={styles.sectionHeader}>
-          <h2 className={styles.sectionTitle}>{t('home.featuredProperties')}</h2>
+        <div className={styles.sectionHeader} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+          <div>
+            <h2 className={styles.sectionTitle}>{t('home.featuredProperties')}</h2>
+            <p style={{ color: 'var(--color-text-secondary)', fontSize: '0.88rem', margin: '4px 0 0' }}>
+              {language === 'ta'
+                ? 'பிரபல நகரங்களின் குறுக்குவழிகள் மூலம் நிலங்களை விரைவாக காண்க.'
+                : 'Browse user properties in popular cities via quick shortlinks.'}
+            </p>
+          </div>
+          {selectedCityFilter !== 'All' && (
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={() => navigate(`/search?city=${encodeURIComponent(selectedCityFilter)}`)}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+            >
+              <span>{language === 'ta' ? `${selectedCityFilter} முடிவுகள் பார்க்க` : `View all in ${selectedCityFilter}`}</span> →
+            </Button>
+          )}
         </div>
+
+        {/* Popular Cities Shortlinks Pills */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', overflowX: 'auto', paddingBottom: '12px', marginBottom: '16px' }}>
+          <button
+            onClick={() => setSelectedCityFilter('All')}
+            style={{
+              padding: '6px 14px',
+              borderRadius: '20px',
+              border: selectedCityFilter === 'All' ? '1.5px solid var(--color-primary)' : '1px solid var(--color-border)',
+              backgroundColor: selectedCityFilter === 'All' ? 'var(--color-primary)' : 'var(--color-surface)',
+              color: selectedCityFilter === 'All' ? '#ffffff' : 'var(--color-text-primary)',
+              fontWeight: selectedCityFilter === 'All' ? 600 : 500,
+              fontSize: '0.85rem',
+              cursor: 'pointer',
+              whiteSpace: 'nowrap',
+              transition: 'all 0.2s ease',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px'
+            }}
+          >
+            <span>{language === 'ta' ? 'அனைத்து நகரங்கள்' : 'All Cities'}</span>
+            <span style={{ 
+              backgroundColor: selectedCityFilter === 'All' ? 'rgba(255,255,255,0.25)' : 'var(--color-border)',
+              padding: '1px 6px',
+              borderRadius: '10px',
+              fontSize: '0.75rem'
+            }}>
+              {properties.length}
+            </span>
+          </button>
+
+          {popularLocations.filter(loc => loc.count > 0 || defaultCities.slice(0, 6).includes(loc.name)).map(loc => {
+            const isSelected = selectedCityFilter.toLowerCase() === loc.name.toLowerCase();
+            return (
+              <button
+                key={loc.name}
+                onClick={() => setSelectedCityFilter(isSelected ? 'All' : loc.name)}
+                style={{
+                  padding: '6px 14px',
+                  borderRadius: '20px',
+                  border: isSelected ? '1.5px solid var(--color-primary)' : '1px solid var(--color-border)',
+                  backgroundColor: isSelected ? 'var(--color-primary)' : 'var(--color-surface)',
+                  color: isSelected ? '#ffffff' : 'var(--color-text-primary)',
+                  fontWeight: isSelected ? 600 : 500,
+                  fontSize: '0.85rem',
+                  cursor: 'pointer',
+                  whiteSpace: 'nowrap',
+                  transition: 'all 0.2s ease',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px'
+                }}
+              >
+                <span>{loc.label || loc.name}</span>
+                <span style={{ 
+                  backgroundColor: isSelected ? 'rgba(255,255,255,0.25)' : 'rgba(2, 132, 199, 0.1)',
+                  color: isSelected ? '#ffffff' : 'var(--color-primary)',
+                  padding: '1px 6px',
+                  borderRadius: '10px',
+                  fontSize: '0.75rem',
+                  fontWeight: 700
+                }}>
+                  {loc.count}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Selected City Filter Banner */}
+        {selectedCityFilter !== 'All' && (
+          <div style={{ 
+            marginBottom: '16px', 
+            padding: '8px 14px', 
+            backgroundColor: 'rgba(2, 132, 199, 0.08)', 
+            borderRadius: '8px', 
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: 'space-between',
+            border: '1px solid rgba(2, 132, 199, 0.2)'
+          }}>
+            <span style={{ fontSize: '0.88rem', color: 'var(--color-primary-dark)', fontWeight: 600 }}>
+              📍 {language === 'ta' ? `காண்பிக்கப்படும் நிலங்கள்:` : `Showing user properties in:`} <strong>{selectedCityFilter}</strong> ({displayedProperties.length} {t('home.propertiesCount')})
+            </span>
+            <button 
+              onClick={() => setSelectedCityFilter('All')} 
+              style={{ background: 'none', border: 'none', color: 'var(--color-primary)', fontSize: '0.82rem', fontWeight: 600, cursor: 'pointer', textDecoration: 'underline' }}
+            >
+              {language === 'ta' ? 'அனைத்தையும் காட்டு' : 'Show All'}
+            </button>
+          </div>
+        )}
+
         <div className={styles.propertyGrid}>
-          {properties.length === 0 ? (
+          {displayedProperties.length === 0 ? (
             <div style={{ gridColumn: '1 / -1', textAlign: 'center', padding: 'var(--spacing-8)', backgroundColor: 'var(--color-surface)', borderRadius: 'var(--radius-lg)' }}>
               <p style={{ color: 'var(--color-text-secondary)', marginBottom: 'var(--spacing-4)', fontSize: 'var(--font-size-base)' }}>
-                {t('home.noProperties') || 'No properties listed yet.'}
+                {language === 'ta' ? `${selectedCityFilter} நகரில் இன்னும் நிலங்கள் பட்டியலிடப்படவில்லை.` : `No properties listed in ${selectedCityFilter} yet.`}
               </p>
               <Button onClick={() => navigate('/add-property')}>
                 {t('common.addProperty') || 'List Your Land'}
               </Button>
             </div>
           ) : (
-            properties.map(property => (
+            displayedProperties.map(property => (
               <PropertyCard 
                 key={property.id} 
                 property={property} 
@@ -263,20 +414,62 @@ export default function Home() {
         </section>
       )}
 
-      {/* 5. Popular Locations */}
+      {/* 5. Popular Locations with Direct Shortlinks */}
       <section className={styles.section}>
-        <div className={styles.sectionHeader}>
-          <h2 className={styles.sectionTitle}>{t('home.popularLocations')}</h2>
+        <div className={styles.sectionHeader} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+          <div>
+            <h2 className={styles.sectionTitle}>{t('home.popularLocations')}</h2>
+            <p style={{ color: 'var(--color-text-secondary)', fontSize: '0.88rem', margin: '4px 0 0' }}>
+              {language === 'ta'
+                ? 'பிரபல நகரங்களின் குறுக்குவழிகளை அழுத்தி அனைத்து பட்டியலிடப்பட்ட நிலங்களையும் காண்க.'
+                : 'Click city shortlinks to instantly view listed properties in each location.'}
+            </p>
+          </div>
         </div>
         <div className={styles.locationsGrid}>
-          {popularLocations.map(loc => (
-            <div key={loc.name} className={styles.locationCard} onClick={() => navigate('/search')}>
-              <div style={{ padding: '8px', backgroundColor: 'var(--color-primary-light)', borderRadius: 'var(--radius-full)', color: 'var(--color-primary)' }}>
-                <MapPin size={20} />
+          {popularLocations.slice(0, 8).map(loc => (
+            <div 
+              key={loc.name} 
+              className={styles.locationCard} 
+              onClick={() => navigate(`/search?city=${encodeURIComponent(loc.name)}`)}
+              title={`View properties in ${loc.label || loc.name}`}
+              style={{
+                position: 'relative',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: 'var(--spacing-4)',
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+                border: '1.5px solid var(--color-border)'
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <div style={{ 
+                  padding: '10px', 
+                  backgroundColor: 'var(--color-primary-light)', 
+                  borderRadius: 'var(--radius-full)', 
+                  color: 'var(--color-primary)' 
+                }}>
+                  <MapPin size={22} />
+                </div>
+                <div>
+                  <div style={{ fontWeight: 'var(--font-weight-semibold)', fontSize: '1rem' }}>
+                    {loc.label || loc.name}
+                  </div>
+                  <div style={{ fontSize: 'var(--font-size-sm)', color: loc.count > 0 ? 'var(--color-primary)' : 'var(--color-text-secondary)', fontWeight: loc.count > 0 ? 600 : 400 }}>
+                    {loc.count} {t('home.propertiesCount')}
+                  </div>
+                </div>
               </div>
-              <div>
-                <div style={{ fontWeight: 'var(--font-weight-semibold)' }}>{loc.label || loc.name}</div>
-                <div style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-text-secondary)' }}>{loc.count} {t('home.propertiesCount')}</div>
+
+              <div style={{
+                color: 'var(--color-primary)',
+                fontSize: '1.2rem',
+                fontWeight: 'bold',
+                paddingRight: '4px'
+              }}>
+                →
               </div>
             </div>
           ))}

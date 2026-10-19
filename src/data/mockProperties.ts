@@ -9,7 +9,10 @@ export interface Property {
   reducedAmount?: number; // Amount saved
   area: number;
   areaUnit: 'Sq.Ft' | 'Sq.M' | 'Acre' | 'Cent' | 'Ground';
+  sqFtRate?: number; // Rate per square feet (₹/sq.ft)
+  totalSquareFeet?: number; // Total square feet
   location: string;
+  city?: string; // City / Town
   district: string;
   taluk: string;
   village: string;
