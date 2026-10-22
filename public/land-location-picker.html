@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="ta">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <title>நில இருப்பிடத் தேர்வு - Land Location Selector</title>
+
+  <!-- Leaflet CSS -->
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+  />
+
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      margin: 0;
+      padding: 20px;
+      background: #f4f6f9;
+    }
+
+    .container {
+      max-width: 650px;
+      margin: auto;
+      background: #fff;
+      padding: 24px;
+      border-radius: 12px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+    }
+
+    h2 {
+      font-size: 22px;
+      margin-top: 0;
+      color: #0f172a;
+    }
+
+    #map {
+      height: 380px;
+      width: 100%;
+      border-radius: 8px;
+      margin: 15px 0;
+      z-index: 1;
+      border: 1px solid #cbd5e1;
+    }
+
+    .form-group {
+      margin-bottom: 15px;
+    }
+
+    label {
+      font-weight: 600;
+      display: block;
+      margin-bottom: 6px;
+      color: #334155;
+      font-size: 14px;
+    }
+
+    input,
+    textarea {
+      width: 100%;
+      padding: 11px;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      font-size: 14px;
+      font-family: inherit;
+    }
+
+    input:focus,
+    textarea:focus {
+      outline: none;
+      border-color: #2563eb;
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+    }
+
+    textarea {
+      resize: vertical;
+    }
+
+    .btn {
+      background: #2563eb;
+      color: white;
+      padding: 12px 15px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 15px;
+      font-weight: 500;
+      width: 100%;
+      transition: background-color 0.2s;
+    }
+
+    .btn:hover {
+      background: #1d4ed8;
+    }
+
+    .btn:disabled {
+      opacity: 0.6;
+      cursor: wait;
+    }
+
+    .hint {
+      color: #64748b;
+      font-size: 12px;
+      margin-top: 6px;
+    }
+  </style>
+</head>
+
+<body>
+
+<div class="container">
+
+  <h2>நிலத்தின் இருப்பிடத்தைத் தேர்வு செய்க</h2>
+
+  <button type="button" class="btn" id="locateBtn">
+    📍 எனது தற்போதைய இடத்தை எடு
+  </button>
+
+  <div id="map"></div>
+
+  <div class="form-group">
+    <label for="coordinates">
+      அட்சரேகை & தீர்க்கரேகை (Latitude, Longitude)
+    </label>
+
+    <input
+      type="text"
+      id="coordinates"
+      readonly
+      placeholder="வரைபடத்தில் இடத்தைத் தேர்வு செய்யவும்"
+    >
+  </div>
+
+  <div class="form-group">
+    <label for="address">முழு முகவரி (Address)</label>
+
+    <textarea
+      id="address"
+      rows="3"
+      placeholder="தேர்ந்தெடுக்கப்பட்ட நிலத்தின் முகவரி"
+    ></textarea>
+
+    <div class="hint">
+      முகவரியைச் சரிபார்த்து தேவையெனில் திருத்திக்கொள்ளலாம்.
+    </div>
+  </div>
+
+</div>
+
+<!-- Leaflet JS -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<script>
+  // Default map location
+  // Starting location: Tindivanam / Tamil Nadu
+  const defaultLat = 12.2286;
+  const defaultLng = 79.6514;
+
+  const coordinatesInput = document.getElementById("coordinates");
+  const addressInput = document.getElementById("address");
+  const locateBtn = document.getElementById("locateBtn");
+
+  // Initialize map
+  const map = L.map("map").setView(
+    [defaultLat, defaultLng],
+    12
+  );
+
+  // OpenStreetMap tiles
+  L.tileLayer(
+    "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+    {
+      maxZoom: 19,
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+    }
+  ).addTo(map);
+
+  // Draggable marker
+  const marker = L.marker(
+    [defaultLat, defaultLng],
+    { draggable: true }
+  ).addTo(map);
+
+  let searchTimer = null;
+  let requestNumber = 0;
+
+  // Update coordinates and schedule address lookup
+  function updateLocation(lat, lng) {
+    coordinatesInput.value =
+      lat.toFixed(6) + ", " + lng.toFixed(6);
+
+    // Prevent an older response from replacing a newer selection.
+    const currentRequest = ++requestNumber;
+
+    clearTimeout(searchTimer);
+
+    addressInput.value = "முகவரி தேடப்படுகிறது...";
+
+    // Avoid sending a request for every rapid map click.
+    searchTimer = setTimeout(async function () {
+      try {
+        const url =
+          "https://nominatim.openstreetmap.org/reverse" +
+          "?format=jsonv2" +
+          "&lat=" + encodeURIComponent(lat) +
+          "&lon=" + encodeURIComponent(lng) +
+          "&accept-language=ta,en";
+
+        const response = await fetch(url);
+
+        if (!response.ok) {
+          throw new Error("Address lookup failed");
+        }
+
+        const data = await response.json();
+
+        // Ignore stale responses.
+        if (currentRequest !== requestNumber) {
+          return;
+        }
+
+        if (data && data.display_name) {
+          addressInput.value = data.display_name;
+
+          // Use textContent rather than inserting API data as HTML.
+          const popupContent = document.createElement("div");
+          const popupTitle = document.createElement("strong");
+
+          popupTitle.textContent = "தேர்ந்தெடுக்கப்பட்ட இடம்:";
+          popupContent.appendChild(popupTitle);
+          popupContent.appendChild(document.createElement("br"));
+          popupContent.appendChild(
+            document.createTextNode(data.display_name)
+          );
+
+          marker.bindPopup(popupContent).openPopup();
+        } else {
+          addressInput.value = "இந்த இடத்திற்கான முகவரி கிடைக்கவில்லை.";
+        }
+
+      } catch (error) {
+        if (currentRequest === requestNumber) {
+          addressInput.value =
+            "முகவரியைப் பெற முடியவில்லை. மீண்டும் முயற்சிக்கவும்.";
+        }
+      }
+    }, 1100);
+  }
+
+  // Select a location by clicking on the map.
+  map.on("click", function (event) {
+    marker.setLatLng(event.latlng);
+
+    updateLocation(
+      event.latlng.lat,
+      event.latlng.lng
+    );
+  });
+
+  // Update when the marker is dragged.
+  marker.on("dragend", function () {
+    const position = marker.getLatLng();
+
+    updateLocation(
+      position.lat,
+      position.lng
+    );
+  });
+
+  // Get the device's current location only when the user clicks.
+  locateBtn.addEventListener("click", function () {
+    if (!navigator.geolocation) {
+      alert("உங்கள் பிரவுசரில் இருப்பிட வசதி இல்லை.");
+      return;
+    }
+
+    locateBtn.disabled = true;
+    locateBtn.textContent = "இருப்பிடம் தேடப்படுகிறது...";
+
+    navigator.geolocation.getCurrentPosition(
+      function (position) {
+        const lat = position.coords.latitude;
+        const lng = position.coords.longitude;
+
+        map.setView([lat, lng], 17);
+        marker.setLatLng([lat, lng]);
+
+        updateLocation(lat, lng);
+
+        locateBtn.disabled = false;
+        locateBtn.textContent = "📍 எனது தற்போதைய இடத்தை எடு";
+      },
+
+      function (error) {
+        let message = "இருப்பிடத்தைப் பெற முடியவில்லை.";
+
+        if (error.code === error.PERMISSION_DENIED) {
+          message =
+            "இருப்பிட அனுமதி மறுக்கப்பட்டுள்ளது. Browser settings-ல் அனுமதி வழங்கவும்.";
+        } else if (error.code === error.TIMEOUT) {
+          message =
+            "இருப்பிடத்தைப் பெற அதிக நேரமாகிறது. மீண்டும் முயற்சிக்கவும்.";
+        }
+
+        alert(message);
+
+        locateBtn.disabled = false;
+        locateBtn.textContent = "📍 எனது தற்போதைய இடத்தை எடு";
+      },
+
+      {
+        enableHighAccuracy: true,
+        timeout: 15000,
+        maximumAge: 0
+      }
+    );
+  });
+</script>
+
+</body>
+</html>

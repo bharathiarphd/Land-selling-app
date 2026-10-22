@@ -1,7 +1,7 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { getAnalytics, isSupported } from "firebase/analytics";
-import { getFirestore } from 'firebase/firestore';
+import { initializeFirestore } from 'firebase/firestore';
 
 // Your web app's Firebase configuration
 // These are populated with your actual Firebase project config in .env file
@@ -18,7 +18,9 @@ const firebaseConfig = {
 // Initialize Firebase
 export const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
-export const db = getFirestore(app);
+export const db = initializeFirestore(app, {
+  experimentalAutoDetectLongPolling: true
+});
 
 // Initialize analytics safely if supported in current browser environment
 export let analytics: any = null;

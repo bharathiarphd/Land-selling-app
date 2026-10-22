@@ -5,7 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { Select } from '../components/Select';
-import { GoogleMap } from '../components/GoogleMap';
+import { LandLocationPicker, type GeocodedLocationData } from '../components/LandLocationPicker';
 import { createProperty, getPropertyById, updateProperty } from '../utils/propertyUtils';
 import type { Property } from '../data/mockProperties';
 import styles from './AddProperty.module.css';
@@ -720,39 +720,60 @@ export default function AddProperty() {
               />
             </div>
 
+            {/* Tamil Land Location Picker (நில இருப்பிடத் தேர்வு) using Leaflet & OpenStreetMap */}
             <div style={{ marginTop: 'var(--spacing-6)' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--spacing-2)' }}>
-                <label className={styles.label} style={{ fontWeight: 'var(--font-weight-medium)' }}>Pin on Map (Optional)</label>
-                <button type="button" onClick={() => {
-                  if (navigator.geolocation) {
-                    navigator.geolocation.getCurrentPosition(
-                      (position) => {
-                        setFormData({
-                          ...formData,
-                          location: {
-                            ...formData.location,
-                            latitude: position.coords.latitude,
-                            longitude: position.coords.longitude
-                          }
-                        });
-                      },
-                      () => alert("Unable to retrieve your location")
-                    );
-                  }
-                }} style={{ display: 'flex', alignItems: 'center', gap: '4px', background: 'none', border: 'none', color: 'var(--color-primary)', cursor: 'pointer', fontSize: 'var(--font-size-sm)', fontWeight: 'var(--font-weight-medium)' }}>
-                  <Navigation size={14} /> Use My Current Location
-                </button>
-              </div>
-              <GoogleMap 
-                center={formData.location.latitude && formData.location.longitude ? { lat: formData.location.latitude, lng: formData.location.longitude } : { lat: 12.9716, lng: 80.0415 }}
-                zoom={10}
-                markers={formData.location.latitude && formData.location.longitude ? [{ id: 'marker-1', lat: formData.location.latitude, lng: formData.location.longitude }] : []}
-                onMapClick={(lat, lng) => setFormData({...formData, location: {...formData.location, latitude: lat, longitude: lng}})}
-                style={{ width: '100%', height: '300px' }}
+              <LandLocationPicker
+                initialLat={formData.location.latitude}
+                initialLng={formData.location.longitude}
+                initialAddress={formData.location.address}
+                language={language}
+                onLocationSelect={(data: GeocodedLocationData) => {
+                  setFormData(prev => ({
+                    ...prev,
+                    location: {
+                      ...prev.location,
+                      latitude: data.latitude,
+                      longitude: data.longitude,
+                      address: data.address || prev.location.address
+                    }
+                  }));
+                }}
+                onAddressChange={(newAddress: string) => {
+                  setFormData(prev => ({
+                    ...prev,
+                    location: {
+                      ...prev.location,
+                      address: newAddress
+                    }
+                  }));
+                }}
+                onAutofillFormFields={(data: GeocodedLocationData) => {
+                  setFormData(prev => ({
+                    ...prev,
+                    location: {
+                      ...prev.location,
+                      latitude: data.latitude,
+                      longitude: data.longitude,
+                      address: data.address || prev.location.address,
+                      district: data.district || prev.location.district,
+                      taluk: data.taluk || prev.location.taluk,
+                      village: data.village || prev.location.village,
+                      city: data.city || prev.location.city,
+                      pincode: data.pincode ? data.pincode.replace(/\D/g, '') : prev.location.pincode,
+                      state: data.state || prev.location.state || 'Tamil Nadu'
+                    }
+                  }));
+                  // Clear errors for auto-filled fields
+                  setErrors(prev => ({
+                    ...prev,
+                    district: '',
+                    taluk: '',
+                    village: '',
+                    city: '',
+                    pincode: ''
+                  }));
+                }}
               />
-              <p style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-secondary)', marginTop: 'var(--spacing-2)' }}>
-                Click on the map to place a pin at the property location.
-              </p>
             </div>
           </div>
         )}
