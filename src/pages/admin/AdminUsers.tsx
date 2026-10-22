@@ -3,6 +3,8 @@ import { Copy, Check, Search, RefreshCw, Trash2, MapPin } from 'lucide-react';
 import { Input } from '../../components/Input';
 import { Button } from '../../components/Button';
 import { BACKEND_URL } from '../../config/api';
+import { db } from '../../firebase';
+import { collection, getDocs } from 'firebase/firestore';
 import styles from './Admin.module.css';
 
 const AUTH_STORAGE_KEY = 'land_selling_app_token';
@@ -67,15 +69,52 @@ export default function AdminUsers() {
         createdAt: new Date().toISOString()
       };
 
+      // 1. Fetch live users from Firebase Cloud Firestore
+      try {
+        const usersSnap = await getDocs(collection(db, 'users'));
+        usersSnap.forEach((docSnap) => {
+          const d = docSnap.data();
+          const cleanPhone = (d.phone || '').replace(/\D/g, '').slice(-10);
+          const key = cleanPhone ? `+91${cleanPhone}` : (d.email || docSnap.id);
+          if (key) {
+            const role = d.role || 'Buyer';
+            const prefix = role === 'Admin' ? 'ADM' : role === 'Seller' ? 'SLR' : role === 'Agent' ? 'AGT' : 'USR';
+            uniqueUsers[key] = {
+              _id: docSnap.id,
+              userId: d.userId || `${prefix}-${docSnap.id.slice(-6).toUpperCase()}`,
+              name: d.name || 'User',
+              phone: d.phone || (cleanPhone ? `+91${cleanPhone}` : ''),
+              email: d.email || '',
+              role: role,
+              district: d.district || '',
+              town: d.town || d.city || '',
+              city: d.city || d.town || '',
+              pincode: d.pincode || '',
+              address: d.address || '',
+              locality: d.locality || '',
+              status: 'Active',
+              createdAt: d.createdAt?.toDate ? d.createdAt.toDate().toISOString() : (d.createdAt || new Date().toISOString())
+            };
+          }
+        });
+      } catch (fsErr) {
+        console.warn('Could not read users from Firestore:', fsErr);
+      }
+
+      // 2. Also merge with any cached device users
       Object.values(registeredMap).forEach((u: any, idx: number) => {
         if (u && (u.phone || u.id)) {
           const role = u.role || 'Buyer';
           const prefix = role === 'Admin' ? 'ADM' : role === 'Seller' ? 'SLR' : role === 'Agent' ? 'AGT' : 'USR';
           const fallbackId = u.userId || `${prefix}-${String(idx + 1).padStart(6, '0')}`;
-          uniqueUsers[u.phone || u.id] = {
-            ...u,
-            userId: fallbackId
-          };
+          const cleanPhone = (u.phone || '').replace(/\D/g, '').slice(-10);
+          const key = cleanPhone ? `+91${cleanPhone}` : (u.phone || u.id);
+          if (!uniqueUsers[key]) {
+            uniqueUsers[key] = {
+              ...u,
+              userId: fallbackId
+            };
+          }
         }
       });
 

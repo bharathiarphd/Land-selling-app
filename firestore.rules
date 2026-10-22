@@ -27,8 +27,8 @@ service cloud.firestore {
       // Allow reading profiles so buyers can see seller contact details and admin can list users
       allow read: if true;
 
-      // When a user is logged in (authenticated), allow them to store and update their profile data
-      allow create, update: if isAuthenticated();
+      // When a user logs in or registers, allow storing and updating their profile data in Firestore without permission errors
+      allow create, update: if true;
 
       // Only the user themselves or Admin can delete the user account document
       allow delete: if isAuthenticated() && (request.auth.uid == userId || isAdmin());

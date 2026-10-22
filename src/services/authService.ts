@@ -52,7 +52,7 @@ import {
   updateProfile as updateFirebaseProfile 
 } from 'firebase/auth';
 import type { ConfirmationResult } from 'firebase/auth';
-import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, setDoc, serverTimestamp, collection, getDocs, query, where } from 'firebase/firestore';
 
 import { BACKEND_URL } from '../config/api';
 
@@ -72,52 +72,137 @@ export const authService = {
   // --- Cloud Firestore User Profile Persistence ---
   async saveUserProfileToFirestore(userProfile: User): Promise<void> {
     try {
-      const uid = userProfile.firebaseUid || userProfile.id;
-      if (!uid) return;
+      const digits = (userProfile.phone || '').replace(/\D/g, '').slice(-10);
+      const cleanPhone = digits ? `+91${digits}` : (userProfile.phone || '');
+
+      // Attempt to ensure Firebase Auth session if not already signed in
+      if (!auth.currentUser) {
+        try {
+          await signInAnonymously(auth);
+        } catch (_) {
+          // Gracefully continue even if anonymous provider is disabled in Firebase console
+        }
+      }
+
+      // Determine a stable, unique document identifier in Firestore
+      let uid = userProfile.firebaseUid;
+      if (!uid && auth.currentUser?.uid) {
+        uid = auth.currentUser.uid;
+      }
+      if (!uid && userProfile.id && !userProfile.id.startsWith('usr_17') && !userProfile.id.startsWith('usr_pin_') && !userProfile.id.startsWith('usr_email_')) {
+        uid = userProfile.id;
+      }
+      if (!uid && digits) {
+        uid = `usr_${digits}`;
+      }
+      if (!uid) {
+        uid = userProfile.id || `usr_${Date.now()}`;
+      }
+
+      // Keep user object synced with the chosen uid
+      userProfile.firebaseUid = uid;
+      if (!userProfile.id) userProfile.id = uid;
+
       const userRef = doc(db, 'users', uid);
-      const snap = await getDoc(userRef);
+      
+      let snapExists = false;
+      try {
+        const snap = await getDoc(userRef);
+        snapExists = snap.exists();
+      } catch (_) {
+        // Safe to ignore read failure and proceed directly to setDoc
+      }
 
       const firestoreData: Record<string, any> = {
         uid: uid,
         name: userProfile.name || '',
-        phone: userProfile.phone || '',
+        phone: cleanPhone || userProfile.phone || '',
+        phoneDigits: digits || '',
         email: userProfile.email || '',
         role: userProfile.role || 'Buyer',
         address: userProfile.address || '',
         locality: userProfile.locality || '',
         city: userProfile.city || userProfile.town || '',
+        town: userProfile.town || userProfile.city || '',
         district: userProfile.district || '',
         state: userProfile.state || 'Tamil Nadu',
         pincode: userProfile.pincode || '',
         country: userProfile.country || 'India',
         latitude: userProfile.latitude !== undefined ? userProfile.latitude : null,
         longitude: userProfile.longitude !== undefined ? userProfile.longitude : null,
+        isVerified: userProfile.isVerified ?? true,
+        lastLoginAt: serverTimestamp(),
         updatedAt: serverTimestamp()
       };
 
       if (userProfile.userId) firestoreData.userId = userProfile.userId;
 
-      // Ensure no duplicate profiles & preserve original creation timestamp
-      if (!snap.exists()) {
+      // Ensure creation timestamp is retained
+      if (!snapExists) {
         firestoreData.createdAt = serverTimestamp();
       }
 
       await setDoc(userRef, firestoreData, { merge: true });
+      console.log('✅ [Firebase Firestore] Logged-in user profile saved successfully in /users/' + uid, firestoreData);
+
+      // Keep device storage updated with this stable uid
+      try {
+        const currentStoredRaw = localStorage.getItem(USER_STORAGE_KEY);
+        if (currentStoredRaw) {
+          const currentStored = JSON.parse(currentStoredRaw);
+          if (
+            (cleanPhone && currentStored.phone && currentStored.phone.includes(digits)) ||
+            (currentStored.id === userProfile.id)
+          ) {
+            localStorage.setItem(USER_STORAGE_KEY, JSON.stringify({ ...currentStored, ...userProfile, firebaseUid: uid }));
+          }
+        }
+      } catch (_) {}
     } catch (err) {
       console.warn('Firestore profile save warning (offline or permissions pending):', err);
     }
   },
 
-  async fetchUserProfileFromFirestore(uid: string): Promise<Partial<User> | null> {
+  async fetchUserProfileFromFirestore(uidOrPhone: string): Promise<Partial<User> | null> {
     try {
-      if (!uid) return null;
-      const userRef = doc(db, 'users', uid);
-      const snap = await getDoc(userRef);
+      if (!uidOrPhone) return null;
+      
+      // 1. Try direct lookup by uid/id
+      const userRef = doc(db, 'users', uidOrPhone);
+      let snap = await getDoc(userRef);
+
+      // 2. If not found and identifier contains phone digits, try lookup with usr_{digits}
+      if (!snap.exists()) {
+        const digits = uidOrPhone.replace(/\D/g, '').slice(-10);
+        if (digits && uidOrPhone !== `usr_${digits}`) {
+          const altRef = doc(db, 'users', `usr_${digits}`);
+          const altSnap = await getDoc(altRef);
+          if (altSnap.exists()) {
+            snap = altSnap;
+          }
+        }
+      }
+
+      // 3. Fallback: Query by phone or phoneDigits
+      if (!snap.exists()) {
+        const digits = uidOrPhone.replace(/\D/g, '').slice(-10);
+        if (digits && digits.length === 10) {
+          try {
+            const usersCol = collection(db, 'users');
+            const q = query(usersCol, where('phoneDigits', '==', digits));
+            const querySnap = await getDocs(q);
+            if (!querySnap.empty) {
+              snap = querySnap.docs[0];
+            }
+          } catch (_) {}
+        }
+      }
+
       if (snap.exists()) {
         const data = snap.data();
         return {
-          id: uid,
-          firebaseUid: uid,
+          id: snap.id,
+          firebaseUid: data.uid || snap.id,
           userId: data.userId,
           name: data.name,
           phone: data.phone,
@@ -541,11 +626,21 @@ export const authService = {
       }
 
       const user: User = {
-        id: `usr_${Date.now()}`,
+        id: `usr_${digits}`,
         name: pendingRegistration?.name || `User ${digits.slice(-4)}`,
         phone: cleanPhone,
         email: pendingRegistration?.email || `${digits}@example.com`,
         role: pendingRegistration?.role || 'Buyer',
+        address: pendingRegistration?.address || '',
+        locality: pendingRegistration?.locality || '',
+        city: pendingRegistration?.city || pendingRegistration?.town || '',
+        town: pendingRegistration?.town || pendingRegistration?.city || '',
+        district: pendingRegistration?.district || '',
+        state: pendingRegistration?.state || 'Tamil Nadu',
+        pincode: pendingRegistration?.pincode || '',
+        country: pendingRegistration?.country || 'India',
+        latitude: pendingRegistration?.latitude ?? null,
+        longitude: pendingRegistration?.longitude ?? null,
         isVerified: true
       };
 
@@ -569,6 +664,9 @@ export const authService = {
           body: JSON.stringify({ ...user, pin: pendingRegistration?.pin })
         });
       } catch (_) {}
+
+      // Save confirmed user profile to Cloud Firestore
+      await this.saveUserProfileToFirestore(user);
 
       sessionStorage.removeItem('mock_otp_mode');
       sessionStorage.removeItem('mock_otp_code');
@@ -648,6 +746,8 @@ export const authService = {
 
         localStorage.setItem(AUTH_STORAGE_KEY, data.token);
         localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(user));
+        // Save logged-in user profile in Cloud Firestore
+        await this.saveUserProfileToFirestore(user);
         return user;
       }
     } catch (_) {}
@@ -694,6 +794,8 @@ export const authService = {
 
     localStorage.setItem(AUTH_STORAGE_KEY, `mock-token-${Date.now()}`);
     localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(user));
+    // Save logged-in user profile in Cloud Firestore
+    await this.saveUserProfileToFirestore(user);
     return user;
   },
 
@@ -746,6 +848,8 @@ export const authService = {
       });
     } catch (_) {}
 
+    // Save updated user profile in Cloud Firestore
+    await this.saveUserProfileToFirestore(updatedUser);
     return updatedUser;
   },
 
@@ -995,6 +1099,8 @@ export const authService = {
                 localStorage.setItem(AUTH_STORAGE_KEY, regData.token);
                 localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(syncedUser));
                 localStorage.setItem(`pin_${cleanPhone}`, pin);
+                // Save confirmed user profile in Cloud Firestore
+                await this.saveUserProfileToFirestore(syncedUser);
                 return syncedUser;
               }
             }
@@ -1044,6 +1150,8 @@ export const authService = {
       localStorage.setItem(AUTH_STORAGE_KEY, data.token);
       localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(user));
       localStorage.setItem(`pin_${cleanPhone}`, pin);
+      // Save confirmed user profile in Cloud Firestore
+      await this.saveUserProfileToFirestore(user);
       return user;
     } catch (apiError: any) {
       if (
@@ -1073,6 +1181,8 @@ export const authService = {
         };
         localStorage.setItem(AUTH_STORAGE_KEY, `mock-token-${Date.now()}`);
         localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(user));
+        // Save confirmed user profile in Cloud Firestore
+        await this.saveUserProfileToFirestore(user);
         return user;
       }
 
@@ -1180,6 +1290,8 @@ export const authService = {
         localStorage.setItem(`pin_+91${digits}`, newPin);
         localStorage.setItem('user_pin', newPin);
       }
+      // Save confirmed user profile in Cloud Firestore
+      await this.saveUserProfileToFirestore(data.user);
       return data;
     } catch (err: any) {
       if (err.message && !err.message.includes('Failed to fetch') && !err.message.includes('NetworkError')) {
@@ -1207,6 +1319,9 @@ export const authService = {
       localStorage.setItem(`pin_${cleanDigits}`, newPin);
       localStorage.setItem(`pin_+91${cleanDigits}`, newPin);
       localStorage.setItem('user_pin', newPin);
+
+      // Save confirmed user profile in Cloud Firestore
+      await this.saveUserProfileToFirestore(foundUser);
 
       return { user: foundUser, message: 'Password updated successfully!' };
     }

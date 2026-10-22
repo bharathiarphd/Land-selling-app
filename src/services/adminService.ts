@@ -79,6 +79,8 @@ export interface Complaint {
 }
 
 import { BACKEND_URL } from '../config/api';
+import { db } from '../firebase';
+import { collection, getDocs } from 'firebase/firestore';
 
 const AUTH_STORAGE_KEY = 'land_selling_app_token';
 
@@ -197,12 +199,35 @@ export const adminService = {
       }
     } catch (_) {}
 
+    // Fetch live users from Firebase Cloud Firestore
+    const firestoreUsers: any[] = [];
+    try {
+      const snap = await getDocs(collection(db, 'users'));
+      snap.forEach((docSnap) => {
+        const d = docSnap.data();
+        const role = d.role || 'Buyer';
+        const prefix = role === 'Admin' ? 'ADM' : role === 'Seller' ? 'SLR' : role === 'Agent' ? 'AGT' : 'USR';
+        firestoreUsers.push({
+          userId: d.userId || `${prefix}-${docSnap.id.slice(-6).toUpperCase()}`,
+          name: d.name || 'User',
+          phone: d.phone || '',
+          email: d.email || '',
+          role: role,
+          status: 'Active',
+          district: d.district || '',
+          town: d.town || d.city || '',
+          createdAt: d.createdAt?.toDate ? d.createdAt.toDate().toISOString() : (d.createdAt || new Date().toISOString())
+        });
+      });
+    } catch (_) {}
+
     // Fallback: local users
     const savedUsersRaw = localStorage.getItem('registered_users') || '{}';
     const regUsers = Object.values(JSON.parse(savedUsersRaw)) as any[];
     const baseUsers = [
       { userId: 'ADM-000001', name: 'raja', phone: '+918248843385', role: 'Admin', status: 'Active', district: 'Chennai', town: 'Chennai', createdAt: new Date().toISOString() },
       { userId: 'AGT-000001', name: 'raja', phone: '+919994880312', role: 'Agent', status: 'Active', district: 'Coimbatore', town: 'Pollachi', createdAt: new Date().toISOString() },
+      ...firestoreUsers,
       ...regUsers
     ];
 

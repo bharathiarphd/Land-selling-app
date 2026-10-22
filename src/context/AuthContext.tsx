@@ -20,6 +20,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       try {
         const sessionUser = await authService.getSession();
         setUser(sessionUser);
+        if (sessionUser) {
+          authService.saveUserProfileToFirestore(sessionUser).catch((err) => {
+            console.warn('Session Firestore sync error:', err);
+          });
+        }
       } catch (error) {
         console.error('Failed to restore session', error);
       } finally {
@@ -32,6 +37,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = (newUser: User) => {
     setUser(newUser);
+    // Automatically persist logged-in user profile into Firebase Firestore
+    authService.saveUserProfileToFirestore(newUser).catch((err) => {
+      console.warn('Login Firestore sync error:', err);
+    });
   };
 
   const logout = async () => {
