@@ -142,6 +142,13 @@ export const authService = {
       if (!userProfile.id) userProfile.id = uid;
 
       const userRef = doc(db, 'users', uid);
+      let snapExists = false;
+      try {
+        const snap = await getDoc(userRef);
+        snapExists = snap.exists();
+      } catch (_) {
+        // Safe to ignore read failure and proceed directly to setDoc
+      }
 
       const firestoreData: Record<string, any> = {
         uid: uid,
@@ -167,9 +174,14 @@ export const authService = {
 
       if (userProfile.userId) firestoreData.userId = userProfile.userId;
 
+      // Ensure creation timestamp is retained
+      if (!snapExists) {
+        firestoreData.createdAt = serverTimestamp();
+      }
+
       let savedOk = false;
       try {
-        await setDoc(userRef, { ...firestoreData, createdAt: serverTimestamp() }, { merge: true });
+        await setDoc(userRef, firestoreData, { merge: true });
         savedOk = true;
         console.log('✅ [Firebase Firestore] Logged-in user profile saved successfully in /users/' + uid, firestoreData);
       } catch (sdkErr: any) {
