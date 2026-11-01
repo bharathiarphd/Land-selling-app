@@ -72,7 +72,6 @@ export default function AdminUsers() {
 
       // 1. Fetch live users from Firebase Cloud Firestore
       try {
-        await authService.ensureFirebaseAuthSession();
         const usersSnap = await getDocs(collection(db, 'users'));
         usersSnap.forEach((docSnap) => {
           const d = docSnap.data();

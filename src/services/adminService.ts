@@ -203,7 +203,6 @@ export const adminService = {
     // Fetch live users from Firebase Cloud Firestore
     const firestoreUsers: any[] = [];
     try {
-      await authService.ensureFirebaseAuthSession();
       const snap = await getDocs(collection(db, 'users'));
       snap.forEach((docSnap) => {
         const d = docSnap.data();

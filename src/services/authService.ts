@@ -1,7 +1,8 @@
 export type UserRole = 'Buyer' | 'Seller' | 'Agent' | 'Admin';
 
 export interface User {
-  id: string; 
+  id: string;
+  pin?: string; 
   firebaseUid?: string;
   userId?: string; // ADM-000001, USR-000001, SLR-000001, AGT-000001
   name: string;
@@ -114,44 +115,35 @@ export const authService = {
   },
 
   // --- Cloud Firestore User Profile Persistence ---
-  async saveUserProfileToFirestore(userProfile: User): Promise<void> {
+  async saveUserProfileToFirestore(userProfile: User & { pin?: string }): Promise<void> {
     try {
       const digits = (userProfile.phone || '').replace(/\D/g, '').slice(-10);
       const cleanPhone = digits ? `+91${digits}` : (userProfile.phone || '');
 
-      // 1. Guaranteed Firebase Auth session to satisfy Firestore security rules
-      const authUser = await this.ensureFirebaseAuthSession(userProfile.email || userProfile.phone);
+      // Ensure stable, deterministic document ID in Firestore:
+      // Phone number is the universal key in India: /users/usr_${digits}
+      const phoneDocId = digits ? `usr_${digits}` : '';
+      const hasPersonalFirebaseUid = userProfile.firebaseUid && 
+        userProfile.firebaseUid !== '4s5VjlYludXSk23EI8X67TqaxKm2' && 
+        userProfile.firebaseUid.length > 15;
 
-      // Determine a stable, unique document identifier in Firestore
-      let uid = userProfile.firebaseUid;
-      if (!uid && authUser?.uid) {
-        uid = authUser.uid;
-      }
-      if (!uid && userProfile.id && !userProfile.id.startsWith('usr_17') && !userProfile.id.startsWith('usr_pin_') && !userProfile.id.startsWith('usr_email_')) {
-        uid = userProfile.id;
-      }
-      if (!uid && digits) {
-        uid = `usr_${digits}`;
-      }
-      if (!uid) {
-        uid = userProfile.id || `usr_${Date.now()}`;
-      }
+      const mainUid = phoneDocId || (hasPersonalFirebaseUid ? userProfile.firebaseUid! : (userProfile.id || `usr_${Date.now()}`));
 
-      // Keep user object synced with the chosen uid
-      userProfile.firebaseUid = uid;
-      if (!userProfile.id) userProfile.id = uid;
+      // Sync user object with the chosen uid
+      userProfile.firebaseUid = hasPersonalFirebaseUid ? userProfile.firebaseUid : mainUid;
+      if (!userProfile.id) userProfile.id = mainUid;
 
-      const userRef = doc(db, 'users', uid);
-      let snapExists = false;
-      try {
-        const snap = await getDoc(userRef);
-        snapExists = snap.exists();
-      } catch (_) {
-        // Safe to ignore read failure and proceed directly to setDoc
-      }
+      const savedPin = userProfile.pin || 
+        localStorage.getItem(`pin_${cleanPhone}`) || 
+        localStorage.getItem(`pin_${digits}`) || 
+        localStorage.getItem('user_pin') || '';
+
+      const prefix = userProfile.role === 'Admin' ? 'ADM' : userProfile.role === 'Seller' ? 'SLR' : userProfile.role === 'Agent' ? 'AGT' : 'USR';
+      const derivedUserId = userProfile.userId || `${prefix}-${(digits || mainUid).slice(-6).toUpperCase()}`;
 
       const firestoreData: Record<string, any> = {
-        uid: uid,
+        uid: mainUid,
+        userId: derivedUserId,
         name: userProfile.name || '',
         phone: cleanPhone || userProfile.phone || '',
         phoneDigits: digits || '',
@@ -172,61 +164,75 @@ export const authService = {
         updatedAt: serverTimestamp()
       };
 
-      if (userProfile.userId) firestoreData.userId = userProfile.userId;
+      if (savedPin) {
+        firestoreData.pin = String(savedPin).trim();
+      }
 
-      // Ensure creation timestamp is retained
+      // Check if document already exists so createdAt is preserved
+      let snapExists = false;
+      const targetRefs = [doc(db, 'users', mainUid)];
+      if (phoneDocId && mainUid !== phoneDocId) {
+        targetRefs.push(doc(db, 'users', phoneDocId));
+      }
+      if (hasPersonalFirebaseUid && mainUid !== userProfile.firebaseUid) {
+        targetRefs.push(doc(db, 'users', userProfile.firebaseUid!));
+      }
+
+      try {
+        const snap = await getDoc(targetRefs[0]);
+        snapExists = snap.exists();
+      } catch (_) {}
+
       if (!snapExists) {
         firestoreData.createdAt = serverTimestamp();
       }
 
+      // Direct write to Firestore via SDK
       let savedOk = false;
       try {
-        await setDoc(userRef, firestoreData, { merge: true });
+        await Promise.all(targetRefs.map(ref => setDoc(ref, firestoreData, { merge: true })));
         savedOk = true;
-        console.log('✅ [Firebase Firestore] Logged-in user profile saved successfully in /users/' + uid, firestoreData);
+        console.log('✅ [Firebase Firestore] User profile saved successfully in /users/' + mainUid, firestoreData);
       } catch (sdkErr: any) {
         console.warn('Firestore SDK setDoc failed, attempting REST API fallback:', sdkErr?.message || sdkErr);
       }
 
-      // 2. Also save or link by phone document /users/usr_${digits} if different from uid
-      if (digits && uid !== `usr_${digits}`) {
-        try {
-          const phoneRef = doc(db, 'users', `usr_${digits}`);
-          await setDoc(phoneRef, firestoreData, { merge: true });
-        } catch (_) {}
-      }
-
-      // 3. Resilient REST API fallback: If SDK was blocked by browser network/privacy policies
+      // Resilient REST API fallback if SDK is blocked by browser network/privacy policies
       if (!savedOk) {
         try {
-          const idToken = auth.currentUser ? await auth.currentUser.getIdToken() : null;
-          if (idToken) {
-            const projectId = import.meta.env.VITE_FIREBASE_PROJECT_ID || 'land-buy-selling';
-            const apiKey = import.meta.env.VITE_FIREBASE_API_KEY || '';
-            const restFields: Record<string, any> = {};
-            for (const [k, v] of Object.entries(firestoreData)) {
-              if (v === null || v === undefined) continue;
-              if (typeof v === 'string') restFields[k] = { stringValue: v };
-              else if (typeof v === 'number') restFields[k] = { doubleValue: v };
-              else if (typeof v === 'boolean') restFields[k] = { booleanValue: v };
-            }
-            const restRes = await fetch(`https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/users/${uid}?key=${apiKey}`, {
+          const idToken = auth.currentUser ? await auth.currentUser.getIdToken().catch(() => null) : null;
+          const projectId = import.meta.env.VITE_FIREBASE_PROJECT_ID || 'land-buy-selling';
+          const apiKey = import.meta.env.VITE_FIREBASE_API_KEY || '';
+          const restFields: Record<string, any> = {};
+          for (const [k, v] of Object.entries(firestoreData)) {
+            if (v === null || v === undefined) continue;
+            if (typeof v === 'string') restFields[k] = { stringValue: v };
+            else if (typeof v === 'number') restFields[k] = { doubleValue: v };
+            else if (typeof v === 'boolean') restFields[k] = { booleanValue: v };
+          }
+
+          const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+          if (idToken) headers['Authorization'] = `Bearer ${idToken}`;
+
+          const restRes = await fetch(
+            `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/users/${mainUid}?key=${apiKey}`,
+            {
               method: 'PATCH',
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${idToken}`
-              },
+              headers,
               body: JSON.stringify({ fields: restFields })
-            });
-            if (restRes.ok) {
-              console.log('✅ [Firebase REST] User saved via Firestore REST API in /users/' + uid);
-              savedOk = true;
             }
+          );
+          if (restRes.ok) {
+            console.log('✅ [Firebase REST] User saved via Firestore REST API in /users/' + mainUid);
+            savedOk = true;
           }
         } catch (restErr) {
           console.warn('Firestore REST fallback warning:', restErr);
         }
       }
+
+      // Background non-blocking Firebase Auth session sync (never blocks Firestore write)
+      this.ensureFirebaseAuthSession(userProfile.email || userProfile.phone).catch(() => {});
 
       // Keep device storage updated with this stable uid
       try {
@@ -237,7 +243,7 @@ export const authService = {
             (cleanPhone && currentStored.phone && currentStored.phone.includes(digits)) ||
             (currentStored.id === userProfile.id)
           ) {
-            localStorage.setItem(USER_STORAGE_KEY, JSON.stringify({ ...currentStored, ...userProfile, firebaseUid: uid }));
+            localStorage.setItem(USER_STORAGE_KEY, JSON.stringify({ ...currentStored, ...userProfile, firebaseUid: mainUid }));
           }
         }
       } catch (_) {}
@@ -549,6 +555,7 @@ export const authService = {
     const digits = phone.replace(/\D/g, '').slice(-10);
     const cleanPhone = `+91${digits}`;
 
+    // 1. Try Backend API
     try {
       const res = await fetch(`${BACKEND_URL}/api/auth/check-user`, {
         method: 'POST',
@@ -559,9 +566,42 @@ export const authService = {
         return await res.json();
       }
     } catch (_) {
-      // Offline fallback
+      // Backend unavailable, fallback seamlessly to Firebase Cloud Firestore
     }
 
+    // 2. Direct Cloud Firestore check (/users/usr_${digits})
+    try {
+      if (digits) {
+        const fsDoc = await getDoc(doc(db, 'users', `usr_${digits}`));
+        if (fsDoc.exists()) {
+          const d = fsDoc.data();
+          const localPin = localStorage.getItem(`pin_${cleanPhone}`) || localStorage.getItem(`pin_${digits}`);
+          return {
+            exists: true,
+            hasPin: !!(d.pin || localPin),
+            name: d.name,
+            email: d.email
+          };
+        }
+
+        // Also query by phoneDigits
+        const usersCol = collection(db, 'users');
+        const q = query(usersCol, where('phoneDigits', '==', digits));
+        const qSnap = await getDocs(q);
+        if (!qSnap.empty) {
+          const d = qSnap.docs[0].data();
+          const localPin = localStorage.getItem(`pin_${cleanPhone}`) || localStorage.getItem(`pin_${digits}`);
+          return {
+            exists: true,
+            hasPin: !!(d.pin || localPin),
+            name: d.name,
+            email: d.email
+          };
+        }
+      }
+    } catch (_) {}
+
+    // 3. Device localStorage fallback
     try {
       const savedUsersRaw = localStorage.getItem('registered_users') || '{}';
       const registeredUsers = JSON.parse(savedUsersRaw);
@@ -1011,7 +1051,7 @@ export const authService = {
       };
 
       // 2. Save confirmed user profile & address details in Cloud Firestore
-      await this.saveUserProfileToFirestore(user);
+      await this.saveUserProfileToFirestore({ ...user, pin: cleanPin });
 
       localStorage.setItem(AUTH_STORAGE_KEY, resData.token);
       localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(user));
@@ -1067,7 +1107,7 @@ export const authService = {
       };
 
       // Save confirmed profile in Cloud Firestore
-      await this.saveUserProfileToFirestore(user);
+      await this.saveUserProfileToFirestore({ ...user, pin: cleanPin });
 
       try {
         const savedUsersRaw = localStorage.getItem('registered_users') || '{}';
@@ -1227,24 +1267,64 @@ export const authService = {
         throw apiError;
       }
 
-      // Fallback to local stored pin if server is completely offline
-      const savedPin = localStorage.getItem(`pin_${cleanPhone}`) || localStorage.getItem(`pin_${digits}`) || (digits === '8248843385' ? '5983' : null);
+      // Fallback to Cloud Firestore and local stored pin if server is completely offline
+      let fsUserDoc: any = null;
+      try {
+        if (digits) {
+          const fsDoc = await getDoc(doc(db, 'users', `usr_${digits}`));
+          if (fsDoc.exists()) {
+            fsUserDoc = fsDoc.data();
+          } else {
+            const qSnap = await getDocs(query(collection(db, 'users'), where('phoneDigits', '==', digits)));
+            if (!qSnap.empty) fsUserDoc = qSnap.docs[0].data();
+          }
+        }
+      } catch (_) {}
+
+      const savedPin = fsUserDoc?.pin || localStorage.getItem(`pin_${cleanPhone}`) || localStorage.getItem(`pin_${digits}`) || (digits === '8248843385' ? '5983' : null);
       if ((savedPin && savedPin === pin) || (digits === '8248843385' && pin === '5983')) {
         const localUserRaw = localStorage.getItem(USER_STORAGE_KEY);
         const cachedUser = localUserRaw ? JSON.parse(localUserRaw) : null;
         const isAdmin = digits === '8248843385';
+        const role = isAdmin ? 'Admin' : (fsUserDoc?.role || cachedUser?.role || 'Buyer');
+        const prefix = role === 'Admin' ? 'ADM' : role === 'Seller' ? 'SLR' : role === 'Agent' ? 'AGT' : 'USR';
+        
         const user: User = {
-          id: cachedUser?.id || (isAdmin ? 'admin_8248843385' : `usr_pin_${Date.now()}`),
-          name: cachedUser?.name || (isAdmin ? 'Super Admin' : `User ${digits.slice(-4)}`),
-          email: cachedUser?.email || (isAdmin ? 'admin@landsellingapp.com' : undefined),
+          id: fsUserDoc?.uid || `usr_${digits}`,
+          firebaseUid: fsUserDoc?.uid || `usr_${digits}`,
+          userId: fsUserDoc?.userId || cachedUser?.userId || `${prefix}-${digits.slice(-6).toUpperCase()}`,
+          name: fsUserDoc?.name || cachedUser?.name || (isAdmin ? 'Super Admin' : `User ${digits.slice(-4)}`),
+          email: fsUserDoc?.email || cachedUser?.email || (isAdmin ? 'admin@landsellingapp.com' : undefined),
           phone: cleanPhone,
-          role: isAdmin ? 'Admin' : (cachedUser?.role || 'Buyer'),
+          role: role,
+          district: fsUserDoc?.district || cachedUser?.district || '',
+          town: fsUserDoc?.town || cachedUser?.town || '',
+          city: fsUserDoc?.city || cachedUser?.city || '',
+          pincode: fsUserDoc?.pincode || cachedUser?.pincode || '',
+          address: fsUserDoc?.address || cachedUser?.address || '',
+          locality: fsUserDoc?.locality || cachedUser?.locality || '',
+          state: fsUserDoc?.state || cachedUser?.state || 'Tamil Nadu',
+          country: fsUserDoc?.country || cachedUser?.country || 'India',
+          latitude: fsUserDoc?.latitude !== undefined ? fsUserDoc.latitude : (cachedUser?.latitude ?? null),
+          longitude: fsUserDoc?.longitude !== undefined ? fsUserDoc.longitude : (cachedUser?.longitude ?? null),
           isVerified: true
         };
         localStorage.setItem(AUTH_STORAGE_KEY, `mock-token-${Date.now()}`);
         localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(user));
-        // Save confirmed user profile in Cloud Firestore
-        await this.saveUserProfileToFirestore(user);
+        localStorage.setItem(`pin_${cleanPhone}`, pin);
+        localStorage.setItem(`pin_${digits}`, pin);
+        localStorage.setItem('user_pin', pin);
+
+    // Also persist PIN into Cloud Firestore!
+    try {
+      if (digits) {
+        const phoneRef = doc(db, 'users', `usr_${digits}`);
+        setDoc(phoneRef, { pin: String(pin).trim(), updatedAt: serverTimestamp() }, { merge: true }).catch(() => {});
+      }
+    } catch (_) {}
+        
+        // Save confirmed user profile in Cloud Firestore to update lastLoginAt
+        this.saveUserProfileToFirestore(user).catch(() => {});
         return user;
       }
 
