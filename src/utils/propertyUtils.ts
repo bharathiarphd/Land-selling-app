@@ -38,6 +38,8 @@ export const DEFAULT_SEED_PROPERTIES: Property[] = [
     },
     status: 'Available',
     dateAdded: '2026-10-10',
+    latitude: 12.9010,
+    longitude: 80.2279,
     verificationStatus: 'Verified by Platform',
     views: 142,
     enquiries: 8
@@ -75,6 +77,8 @@ export const DEFAULT_SEED_PROPERTIES: Property[] = [
     },
     status: 'Available',
     dateAdded: '2026-10-12',
+    latitude: 12.8913,
+    longitude: 80.0811,
     verificationStatus: 'Verified by Platform',
     views: 89,
     enquiries: 5
@@ -109,6 +113,8 @@ export const DEFAULT_SEED_PROPERTIES: Property[] = [
     },
     status: 'Available',
     dateAdded: '2026-10-14',
+    latitude: 12.9675,
+    longitude: 79.9436,
     verificationStatus: 'Verified by Platform',
     views: 210,
     enquiries: 12
@@ -146,6 +152,8 @@ export const DEFAULT_SEED_PROPERTIES: Property[] = [
     },
     status: 'Available',
     dateAdded: '2026-10-15',
+    latitude: 10.6609,
+    longitude: 77.0048,
     verificationStatus: 'Verified by Platform',
     views: 165,
     enquiries: 9
@@ -312,4 +320,40 @@ export const getRecentlyViewed = (): Property[] => {
     console.error('Failed to parse recently viewed', e);
     return [];
   }
+};
+
+export const getPropertyCoordinates = (p?: Partial<Property> | null): { lat: number; lng: number } => {
+  if (p?.latitude && p?.longitude) {
+    return { lat: Number(p.latitude), lng: Number(p.longitude) };
+  }
+
+  const cityLookup: Record<string, { lat: number; lng: number }> = {
+    'sholinganallur': { lat: 12.9010, lng: 80.2279 },
+    'vandalur': { lat: 12.8913, lng: 80.0811 },
+    'tambaram': { lat: 12.9249, lng: 80.1000 },
+    'sriperumbudur': { lat: 12.9675, lng: 79.9436 },
+    'pollachi': { lat: 10.6609, lng: 77.0048 },
+    'chennai': { lat: 13.0827, lng: 80.2707 },
+    'tindivanam': { lat: 12.2286, lng: 79.6514 },
+    'villupuram': { lat: 11.9401, lng: 79.4861 },
+    'coimbatore': { lat: 11.0168, lng: 76.9558 },
+    'madurai': { lat: 9.9252, lng: 78.1198 },
+    'salem': { lat: 11.6643, lng: 78.1460 },
+    'kanchipuram': { lat: 12.8342, lng: 79.7036 },
+    'gingee': { lat: 12.2519, lng: 79.4181 },
+    'cuddalore': { lat: 11.7480, lng: 79.7714 },
+    'trichy': { lat: 10.7905, lng: 78.7047 },
+    'tiruchirappalli': { lat: 10.7905, lng: 78.7047 },
+    'thanjavur': { lat: 10.7870, lng: 79.1378 },
+    'tirunelveli': { lat: 8.7139, lng: 77.7567 },
+    'erode': { lat: 11.3410, lng: 77.7172 },
+    'vellore': { lat: 12.9165, lng: 79.1325 },
+  };
+
+  const key = `${p?.city || ''} ${p?.location || ''} ${p?.district || ''} ${p?.taluk || ''}`.toLowerCase().trim();
+  for (const [k, v] of Object.entries(cityLookup)) {
+    if (key.includes(k)) return v;
+  }
+
+  return { lat: 12.2286, lng: 79.6514 };
 };

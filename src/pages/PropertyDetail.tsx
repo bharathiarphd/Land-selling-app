@@ -11,7 +11,7 @@ import { Input } from '../components/Input';
 import { EmptyState } from '../components/EmptyState';
 import { Toast } from '../components/Toast';
 import { GoogleMap } from '../components/GoogleMap';
-import { getPropertyById, getSimilarProperties, addRecentlyViewed } from '../utils/propertyUtils';
+import { getPropertyById, getSimilarProperties, addRecentlyViewed, getPropertyCoordinates } from '../utils/propertyUtils';
 import { communicationUtils } from '../utils/communicationUtils';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
@@ -252,14 +252,44 @@ export default function PropertyDetail() {
               <div className={styles.detailRow}><span className={styles.detailLabel}>{t('search.taluk')}</span><span className={styles.detailValue}>{property.taluk}</span></div>
               <div className={styles.detailRow}><span className={styles.detailLabel}>{t('search.village')}</span><span className={styles.detailValue}>{property.village}</span></div>
             </div>
-            <div className={styles.mapPlaceholder} style={{ padding: 0, overflow: 'hidden' }}>
-              <GoogleMap 
-                center={property.latitude && property.longitude ? { lat: property.latitude, lng: property.longitude } : { lat: 12.9716, lng: 80.0415 }}
-                zoom={14}
-                markers={property.latitude && property.longitude ? [{ id: '1', lat: property.latitude, lng: property.longitude, title: property.title }] : []}
-                style={{ width: '100%', height: '100%' }}
-              />
-            </div>
+            {(() => {
+              const coords = getPropertyCoordinates(property);
+              return (
+                <>
+                  <div className={styles.mapPlaceholder} style={{ padding: 0, overflow: 'hidden' }}>
+                    <GoogleMap 
+                      center={coords}
+                      zoom={14}
+                      markers={[{ id: property.id, lat: coords.lat, lng: coords.lng, title: property.title, price: property.price }]}
+                      style={{ width: '100%', height: '100%' }}
+                    />
+                  </div>
+                  <div style={{ marginTop: '10px', display: 'flex', justifyContent: 'flex-end' }}>
+                    <a 
+                      href={`https://www.google.com/maps/dir/?api=1&destination=${coords.lat},${coords.lng}`} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        padding: '6px 14px',
+                        borderRadius: '20px',
+                        backgroundColor: 'rgba(2, 132, 199, 0.08)',
+                        color: 'var(--color-primary, #0284c7)',
+                        fontSize: '0.84rem',
+                        fontWeight: 600,
+                        textDecoration: 'none',
+                        border: '1px solid rgba(2, 132, 199, 0.25)'
+                      }}
+                    >
+                      <Navigation size={14} />
+                      <span>{language === 'ta' ? 'Google மேப்பில் வழித்தடம் பார்க்க' : 'Open in Google Maps Directions'}</span>
+                    </a>
+                  </div>
+                </>
+              );
+            })()}
           </section>
         </div>
 

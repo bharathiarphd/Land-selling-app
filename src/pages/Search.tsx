@@ -7,7 +7,7 @@ import { Button } from '../components/Button';
 import { Modal } from '../components/Modal';
 import { Select } from '../components/Select';
 import { GoogleMap, type MarkerData } from '../components/GoogleMap';
-import { getAllProperties, syncPropertiesFromBackend } from '../utils/propertyUtils';
+import { getAllProperties, syncPropertiesFromBackend, getPropertyCoordinates } from '../utils/propertyUtils';
 import type { Property } from '../data/mockProperties';
 import { filterProperties, sortProperties, type SortOption, type FilterOptions } from '../utils/searchUtils';
 import { FilterSections } from '../components/search/FilterSections';
@@ -111,15 +111,18 @@ export default function Search() {
   };
 
   const mapMarkers: MarkerData[] = useMemo(() => {
-    return results
-      .filter(p => p.latitude && p.longitude)
-      .map(p => ({
+    return results.map(p => {
+      const coords = getPropertyCoordinates(p);
+      return {
         id: p.id,
-        lat: p.latitude!,
-        lng: p.longitude!,
+        lat: coords.lat,
+        lng: coords.lng,
         title: p.title,
+        price: p.price,
+        area: `${p.area} ${p.areaUnit}`,
         onClick: () => navigate(`/property/${p.id}`)
-      }));
+      };
+    });
   }, [results, navigate]);
 
   return (
