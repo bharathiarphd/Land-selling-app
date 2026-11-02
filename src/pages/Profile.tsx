@@ -117,7 +117,7 @@ export default function Profile() {
     const loadFirebaseProfile = async () => {
       if (user?.id) {
         try {
-          const fsProfile = await authService.fetchUserProfileFromFirestore(user.id);
+          const fsProfile = await authService.fetchUserProfileFromFirestore(user.id, user.phone);
           if (fsProfile && isMounted) {
             const hasNewAddress = 
               (fsProfile.address && !user.address) ||
@@ -310,6 +310,9 @@ export default function Profile() {
 
   const handleLogout = async () => {
     if (window.confirm(language === 'ta' ? 'நீங்கள் உறுதியாக வெளியேற விரும்புகிறீர்களா?' : 'Are you sure you want to logout?')) {
+      if (user) {
+        await authService.saveUserProfileToFirestore(user).catch(() => {});
+      }
       await logout();
       navigate('/');
     }

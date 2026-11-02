@@ -275,8 +275,19 @@ export const updatePropertyStatus = (id: string, status: Property['status'] | 'D
   return true;
 };
 
-export const getUserProperties = (userId: string): Property[] => {
-  return getAllProperties().filter(p => p.seller.id === userId);
+export const getUserProperties = (userId: string, userPhone?: string): Property[] => {
+  const digits = userPhone ? String(userPhone).replace(/\D/g, '').slice(-10) : '';
+  const userIdDigits = userId ? String(userId).replace(/\D/g, '').slice(-10) : '';
+  const targetDigits = digits || (userIdDigits.length === 10 ? userIdDigits : '');
+
+  return getAllProperties().filter(p => {
+    if (p.seller?.id === userId) return true;
+    if (targetDigits && p.seller?.phone) {
+      const pDigits = String(p.seller.phone).replace(/\D/g, '').slice(-10);
+      if (pDigits === targetDigits) return true;
+    }
+    return false;
+  });
 };
 
 export const getSimilarProperties = (property: Property, limit: number = 4): Property[] => {

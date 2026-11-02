@@ -2,7 +2,7 @@ export type UserRole = 'Buyer' | 'Seller' | 'Agent' | 'Admin';
 
 export interface User {
   id: string;
-  pin?: string; 
+  pin?: string;
   firebaseUid?: string;
   userId?: string; // ADM-000001, USR-000001, SLR-000001, AGT-000001
   name: string;
@@ -44,13 +44,13 @@ export interface RegisterData {
 }
 
 import { auth, db } from '../firebase';
-import { 
-  RecaptchaVerifier, 
-  signInWithPhoneNumber, 
-  createUserWithEmailAndPassword, 
-  signInWithEmailAndPassword, 
+import {
+  RecaptchaVerifier,
+  signInWithPhoneNumber,
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
   signInAnonymously,
-  updateProfile as updateFirebaseProfile 
+  updateProfile as updateFirebaseProfile
 } from 'firebase/auth';
 import type { ConfirmationResult } from 'firebase/auth';
 import { doc, getDoc, setDoc, serverTimestamp, collection, getDocs, query, where } from 'firebase/firestore';
@@ -69,7 +69,7 @@ declare global {
 }
 
 export const authService = {
-  
+
   // --- Ensure Firebase Authentication Session ---
   // Guarantees an active Firebase Auth user session so that Cloud Firestore security rules
   // (request.auth != null) never reject writes with 403 PERMISSION_DENIED.
@@ -78,8 +78,8 @@ export const authService = {
 
     const digits = (emailOrPhone || '').replace(/\D/g, '').slice(-10);
     const isEmail = (emailOrPhone || '').includes('@');
-    const authEmail = isEmail 
-      ? emailOrPhone!.trim().toLowerCase() 
+    const authEmail = isEmail
+      ? emailOrPhone!.trim().toLowerCase()
       : (digits ? `usr_${digits}@landsellingapp.com` : 'user_app@landsellingapp.com');
     const authPassword = preferredPassword || `Pin#${digits || '1234'}#LandApp99`;
 
@@ -88,15 +88,15 @@ export const authService = {
       return cred.user;
     } catch (err: any) {
       if (
-        err.code === 'auth/user-not-found' || 
-        err.code === 'auth/invalid-credential' || 
+        err.code === 'auth/user-not-found' ||
+        err.code === 'auth/invalid-credential' ||
         err.code === 'auth/wrong-password' ||
         err.code === 'auth/invalid-login-credentials'
       ) {
         try {
           const cred = await createUserWithEmailAndPassword(auth, authEmail, authPassword);
           return cred.user;
-        } catch (_) {}
+        } catch (_) { }
       }
     }
 
@@ -108,7 +108,7 @@ export const authService = {
       try {
         const cred = await createUserWithEmailAndPassword(auth, 'sync_default@landsellingapp.com', 'SyncApp#2026#LandApp99');
         return cred.user;
-      } catch (_) {}
+      } catch (_) { }
     }
 
     return auth.currentUser;
@@ -123,8 +123,8 @@ export const authService = {
       // Ensure stable, deterministic document ID in Firestore:
       // Phone number is the universal key in India: /users/usr_${digits}
       const phoneDocId = digits ? `usr_${digits}` : '';
-      const hasPersonalFirebaseUid = userProfile.firebaseUid && 
-        userProfile.firebaseUid !== '4s5VjlYludXSk23EI8X67TqaxKm2' && 
+      const hasPersonalFirebaseUid = userProfile.firebaseUid &&
+        userProfile.firebaseUid !== '4s5VjlYludXSk23EI8X67TqaxKm2' &&
         userProfile.firebaseUid.length > 15;
 
       const mainUid = phoneDocId || (hasPersonalFirebaseUid ? userProfile.firebaseUid! : (userProfile.id || `usr_${Date.now()}`));
@@ -133,9 +133,9 @@ export const authService = {
       userProfile.firebaseUid = hasPersonalFirebaseUid ? userProfile.firebaseUid : mainUid;
       if (!userProfile.id) userProfile.id = mainUid;
 
-      const savedPin = userProfile.pin || 
-        localStorage.getItem(`pin_${cleanPhone}`) || 
-        localStorage.getItem(`pin_${digits}`) || 
+      const savedPin = userProfile.pin ||
+        localStorage.getItem(`pin_${cleanPhone}`) ||
+        localStorage.getItem(`pin_${digits}`) ||
         localStorage.getItem('user_pin') || '';
 
       const prefix = userProfile.role === 'Admin' ? 'ADM' : userProfile.role === 'Seller' ? 'SLR' : userProfile.role === 'Agent' ? 'AGT' : 'USR';
@@ -168,7 +168,7 @@ export const authService = {
         firestoreData.pin = String(savedPin).trim();
       }
 
-      // Check if document already exists so createdAt is preserved
+      // Read existing doc to preserve non-empty data (never wipe fields with empty strings)
       let snapExists = false;
       const targetRefs = [doc(db, 'users', mainUid)];
       if (phoneDocId && mainUid !== phoneDocId) {
@@ -181,7 +181,24 @@ export const authService = {
       try {
         const snap = await getDoc(targetRefs[0]);
         snapExists = snap.exists();
-      } catch (_) {}
+        if (snapExists && snap.data()) {
+          const prev = snap.data()!;
+          if (!firestoreData.address && prev.address) firestoreData.address = prev.address;
+          if (!firestoreData.locality && prev.locality) firestoreData.locality = prev.locality;
+          if (!firestoreData.city && (prev.city || prev.town)) firestoreData.city = prev.city || prev.town;
+          if (!firestoreData.town && (prev.town || prev.city)) firestoreData.town = prev.town || prev.city;
+          if (!firestoreData.district && prev.district) firestoreData.district = prev.district;
+          if (!firestoreData.pincode && prev.pincode) firestoreData.pincode = prev.pincode;
+          if (!firestoreData.state && prev.state) firestoreData.state = prev.state;
+          if (!firestoreData.country && prev.country) firestoreData.country = prev.country;
+          if ((firestoreData.latitude === null || firestoreData.latitude === undefined) && prev.latitude !== undefined) firestoreData.latitude = prev.latitude;
+          if ((firestoreData.longitude === null || firestoreData.longitude === undefined) && prev.longitude !== undefined) firestoreData.longitude = prev.longitude;
+          if (!firestoreData.pin && prev.pin) firestoreData.pin = prev.pin;
+          if (!firestoreData.email && prev.email) firestoreData.email = prev.email;
+          if ((!firestoreData.name || firestoreData.name === 'User') && prev.name && prev.name !== 'User') firestoreData.name = prev.name;
+          if (!firestoreData.userId && prev.userId) firestoreData.userId = prev.userId;
+        }
+      } catch (_) { }
 
       if (!snapExists) {
         firestoreData.createdAt = serverTimestamp();
@@ -232,9 +249,9 @@ export const authService = {
       }
 
       // Background non-blocking Firebase Auth session sync (never blocks Firestore write)
-      this.ensureFirebaseAuthSession(userProfile.email || userProfile.phone).catch(() => {});
+      this.ensureFirebaseAuthSession(userProfile.email || userProfile.phone).catch(() => { });
 
-      // Keep device storage updated with this stable uid
+      // Keep device storage updated with this stable uid & merged profile
       try {
         const currentStoredRaw = localStorage.getItem(USER_STORAGE_KEY);
         if (currentStoredRaw) {
@@ -243,51 +260,99 @@ export const authService = {
             (cleanPhone && currentStored.phone && currentStored.phone.includes(digits)) ||
             (currentStored.id === userProfile.id)
           ) {
-            localStorage.setItem(USER_STORAGE_KEY, JSON.stringify({ ...currentStored, ...userProfile, firebaseUid: mainUid }));
+            localStorage.setItem(USER_STORAGE_KEY, JSON.stringify({ ...currentStored, ...userProfile, ...firestoreData, firebaseUid: mainUid }));
           }
         }
-      } catch (_) {}
+
+        // Also update registered_users cache
+        const savedUsersRaw = localStorage.getItem('registered_users') || '{}';
+        const registeredUsers = JSON.parse(savedUsersRaw);
+        if (digits) {
+          registeredUsers[`+91${digits}`] = { ...(registeredUsers[`+91${digits}`] || {}), ...userProfile, ...firestoreData, firebaseUid: mainUid };
+          registeredUsers[digits] = { ...(registeredUsers[digits] || {}), ...userProfile, ...firestoreData, firebaseUid: mainUid };
+        }
+        localStorage.setItem('registered_users', JSON.stringify(registeredUsers));
+      } catch (_) { }
     } catch (err) {
       console.warn('Firestore profile save warning:', err);
     }
   },
 
-  async fetchUserProfileFromFirestore(uidOrPhone: string): Promise<Partial<User> | null> {
+  async fetchUserProfileFromFirestore(uidOrPhone?: string, fallbackPhone?: string): Promise<Partial<User> | null> {
     try {
-      if (!uidOrPhone) return null;
-      
-      // 1. Try direct lookup by uid/id
-      const userRef = doc(db, 'users', uidOrPhone);
-      let snap = await getDoc(userRef);
+      if (!uidOrPhone && !fallbackPhone) return null;
 
-      // 2. If not found and identifier contains phone digits, try lookup with usr_{digits}
-      if (!snap.exists()) {
-        const digits = uidOrPhone.replace(/\D/g, '').slice(-10);
-        if (digits && uidOrPhone !== `usr_${digits}`) {
-          const altRef = doc(db, 'users', `usr_${digits}`);
-          const altSnap = await getDoc(altRef);
-          if (altSnap.exists()) {
-            snap = altSnap;
+      const candidates = [fallbackPhone, uidOrPhone].filter(Boolean) as string[];
+      let digits = '';
+      for (const cand of candidates) {
+        const d = cand.replace(/\D/g, '').slice(-10);
+        if (d && d.length === 10) {
+          digits = d;
+          break;
+        }
+      }
+
+      let snap: any = null;
+
+      // 1. Direct lookup by deterministic primary phone key: usr_${digits}
+      if (digits) {
+        try {
+          const phoneRef = doc(db, 'users', `usr_${digits}`);
+          const phoneSnap = await getDoc(phoneRef);
+          if (phoneSnap.exists()) {
+            snap = phoneSnap;
           }
-        }
+        } catch (_) { }
       }
 
-      // 3. Fallback: Query by phone or phoneDigits
-      if (!snap.exists()) {
-        const digits = uidOrPhone.replace(/\D/g, '').slice(-10);
-        if (digits && digits.length === 10) {
-          try {
-            const usersCol = collection(db, 'users');
-            const q = query(usersCol, where('phoneDigits', '==', digits));
-            const querySnap = await getDocs(q);
-            if (!querySnap.empty) {
-              snap = querySnap.docs[0];
-            }
-          } catch (_) {}
-        }
+      // 2. Direct lookup by uidOrPhone if not found
+      if ((!snap || !snap.exists()) && uidOrPhone) {
+        try {
+          const userRef = doc(db, 'users', uidOrPhone);
+          const uSnap = await getDoc(userRef);
+          if (uSnap.exists()) {
+            snap = uSnap;
+          }
+        } catch (_) { }
       }
 
-      if (snap.exists()) {
+      // 3. Fallback: Query by phoneDigits == digits
+      if ((!snap || !snap.exists()) && digits) {
+        try {
+          const usersCol = collection(db, 'users');
+          const q = query(usersCol, where('phoneDigits', '==', digits));
+          const querySnap = await getDocs(q);
+          if (!querySnap.empty) {
+            snap = querySnap.docs[0];
+          }
+        } catch (_) { }
+      }
+
+      // 4. Fallback: Query by phone string (+91${digits})
+      if ((!snap || !snap.exists()) && digits) {
+        try {
+          const usersCol = collection(db, 'users');
+          const q = query(usersCol, where('phone', '==', `+91${digits}`));
+          const querySnap = await getDocs(q);
+          if (!querySnap.empty) {
+            snap = querySnap.docs[0];
+          }
+        } catch (_) { }
+      }
+
+      // 5. Fallback: Query by email if uidOrPhone looks like an email
+      if ((!snap || !snap.exists()) && uidOrPhone && uidOrPhone.includes('@')) {
+        try {
+          const usersCol = collection(db, 'users');
+          const q = query(usersCol, where('email', '==', uidOrPhone.trim().toLowerCase()));
+          const querySnap = await getDocs(q);
+          if (!querySnap.empty) {
+            snap = querySnap.docs[0];
+          }
+        } catch (_) { }
+      }
+
+      if (snap && snap.exists()) {
         const data = snap.data();
         return {
           id: snap.id,
@@ -297,16 +362,18 @@ export const authService = {
           phone: data.phone,
           email: data.email,
           role: data.role,
+          pin: data.pin,
           address: data.address,
           locality: data.locality,
-          city: data.city,
-          town: data.city || data.town,
+          city: data.city || data.town,
+          town: data.town || data.city,
           district: data.district,
-          state: data.state,
+          state: data.state || 'Tamil Nadu',
           pincode: data.pincode,
-          country: data.country,
+          country: data.country || 'India',
           latitude: data.latitude,
-          longitude: data.longitude
+          longitude: data.longitude,
+          isVerified: data.isVerified ?? true
         };
       }
     } catch (err) {
@@ -361,7 +428,7 @@ export const authService = {
         registeredUsers[digits] = updatedUser;
       }
       localStorage.setItem('registered_users', JSON.stringify(registeredUsers));
-    } catch (_) {}
+    } catch (_) { }
 
     // 4. Sync with Backend
     try {
@@ -389,7 +456,7 @@ export const authService = {
           longitude: updatedUser.longitude
         })
       });
-    } catch (_) {}
+    } catch (_) { }
 
     return updatedUser;
   },
@@ -400,7 +467,7 @@ export const authService = {
     const localUser: User | null = localUserRaw ? JSON.parse(localUserRaw) : null;
 
     if (!token && !localUser) return null;
-    
+
     // If real token exists, validate with backend
     if (token && !token.startsWith('mock-token')) {
       try {
@@ -431,7 +498,7 @@ export const authService = {
           };
 
           // Try fetching Firestore profile to enrich if available
-          const fsProfile = await this.fetchUserProfileFromFirestore(user.id);
+          const fsProfile = await this.fetchUserProfileFromFirestore(user.id, user.phone);
           if (fsProfile) {
             user = {
               ...user,
@@ -459,7 +526,7 @@ export const authService = {
     // Try fetching Firestore profile for local user if cached
     if (localUser) {
       try {
-        const fsProfile = await this.fetchUserProfileFromFirestore(localUser.firebaseUid || localUser.id);
+        const fsProfile = await this.fetchUserProfileFromFirestore(localUser.firebaseUid || localUser.id, localUser.phone);
         if (fsProfile) {
           if (fsProfile.address && !localUser.address) localUser.address = fsProfile.address;
           if (fsProfile.locality && !localUser.locality) localUser.locality = fsProfile.locality;
@@ -471,7 +538,7 @@ export const authService = {
           if (fsProfile.latitude !== undefined && localUser.latitude === undefined) localUser.latitude = fsProfile.latitude;
           if (fsProfile.longitude !== undefined && localUser.longitude === undefined) localUser.longitude = fsProfile.longitude;
         }
-      } catch (_) {}
+      } catch (_) { }
     }
 
     // If phone is 8248843385, ensure role is Admin
@@ -489,7 +556,7 @@ export const authService = {
     try {
       // Clear previous verifier to prevent reCAPTCHA conflict
       if (window.recaptchaVerifier) {
-        try { window.recaptchaVerifier.clear(); } catch (_) {}
+        try { window.recaptchaVerifier.clear(); } catch (_) { }
         window.recaptchaVerifier = null;
       }
 
@@ -513,7 +580,7 @@ export const authService = {
       return { success: true };
     } catch (error: any) {
       if (window.recaptchaVerifier) {
-        try { window.recaptchaVerifier.clear(); } catch (_) {}
+        try { window.recaptchaVerifier.clear(); } catch (_) { }
         window.recaptchaVerifier = null;
       }
 
@@ -599,7 +666,7 @@ export const authService = {
           };
         }
       }
-    } catch (_) {}
+    } catch (_) { }
 
     // 3. Device localStorage fallback
     try {
@@ -630,10 +697,10 @@ export const authService = {
       try {
         const result = await window.confirmationResult.confirm(otp);
         const firebaseUser = result.user;
-        
+
         window.confirmationResult = null;
         if (window.recaptchaVerifier) {
-          try { window.recaptchaVerifier.clear(); } catch (_) {}
+          try { window.recaptchaVerifier.clear(); } catch (_) { }
           window.recaptchaVerifier = null;
         }
 
@@ -655,13 +722,13 @@ export const authService = {
           try {
             await fetch(`${BACKEND_URL}/api/auth/set-pin`, {
               method: 'POST',
-              headers: { 
+              headers: {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${token}`
               },
               body: JSON.stringify({ phone: cleanPhone, pin: pendingRegistration.pin })
             });
-          } catch (_) {}
+          } catch (_) { }
         }
 
         // Sync with live database backend
@@ -686,13 +753,13 @@ export const authService = {
 
           const response = await fetch(`${BACKEND_URL}/api/users/sync`, {
             method: 'POST',
-            headers: { 
+            headers: {
               'Content-Type': 'application/json',
               'Authorization': `Bearer ${token}`
             },
             body: JSON.stringify(payload)
           });
-          
+
           if (response.ok) {
             const data = await response.json();
             if (data.user) {
@@ -731,7 +798,7 @@ export const authService = {
           registeredUsers[cleanPhone] = user;
           registeredUsers[digits] = user;
           localStorage.setItem('registered_users', JSON.stringify(registeredUsers));
-        } catch (_) {}
+        } catch (_) { }
 
         localStorage.setItem(AUTH_STORAGE_KEY, token);
         localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(user));
@@ -780,13 +847,13 @@ export const authService = {
       try {
         await fetch(`${BACKEND_URL}/api/users/sync`, {
           method: 'POST',
-          headers: { 
+          headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${mockToken}`
           },
           body: JSON.stringify({ ...user, pin: pendingRegistration?.pin })
         });
-      } catch (_) {}
+      } catch (_) { }
 
       // Save confirmed user profile to Cloud Firestore
       await this.saveUserProfileToFirestore(user);
@@ -818,7 +885,7 @@ export const authService = {
         try {
           const cred = await signInWithEmailAndPassword(auth, cleanEmail, `Pin#${password}#LandApp99`);
           firebaseUid = cred.user.uid;
-        } catch (_) {}
+        } catch (_) { }
       }
     }
 
@@ -853,7 +920,7 @@ export const authService = {
 
         // Fetch saved profile using Firebase UID to populate user's address details
         // Do NOT overwrite saved address automatically during login
-        const fsProfile = await this.fetchUserProfileFromFirestore(user.id || data.user.firebaseUid);
+        const fsProfile = await this.fetchUserProfileFromFirestore(user.id || data.user.firebaseUid, user.phone || cleanEmail);
         if (fsProfile) {
           user.address = fsProfile.address || user.address;
           user.locality = fsProfile.locality || user.locality;
@@ -873,7 +940,7 @@ export const authService = {
         await this.saveUserProfileToFirestore(user);
         return user;
       }
-    } catch (_) {}
+    } catch (_) { }
 
     try {
       const savedUsersRaw = localStorage.getItem('registered_users') || '{}';
@@ -887,7 +954,7 @@ export const authService = {
           break;
         }
       }
-    } catch (_) {}
+    } catch (_) { }
 
     const user: User = {
       id: firebaseUid || `usr_email_${Date.now()}`,
@@ -913,7 +980,7 @@ export const authService = {
         user.latitude = fsProfile.latitude !== undefined ? fsProfile.latitude : user.latitude;
         user.longitude = fsProfile.longitude !== undefined ? fsProfile.longitude : user.longitude;
       }
-    } catch (_) {}
+    } catch (_) { }
 
     localStorage.setItem(AUTH_STORAGE_KEY, `mock-token-${Date.now()}`);
     localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(user));
@@ -951,7 +1018,7 @@ export const authService = {
         registeredUsers[digits] = updatedUser;
       }
       localStorage.setItem('registered_users', JSON.stringify(registeredUsers));
-    } catch (_) {}
+    } catch (_) { }
 
     // Sync with backend
     try {
@@ -969,7 +1036,7 @@ export const authService = {
           role: updatedUser.role
         })
       });
-    } catch (_) {}
+    } catch (_) { }
 
     // Save updated user profile in Cloud Firestore
     await this.saveUserProfileToFirestore(updatedUser);
@@ -1066,7 +1133,7 @@ export const authService = {
         registeredUsers[cleanPhone] = user;
         registeredUsers[digits] = user;
         localStorage.setItem('registered_users', JSON.stringify(registeredUsers));
-      } catch (_) {}
+      } catch (_) { }
 
       return { user, token: resData.token };
     } catch (apiError: any) {
@@ -1115,7 +1182,7 @@ export const authService = {
         registeredUsers[cleanPhone] = user;
         registeredUsers[digits] = user;
         localStorage.setItem('registered_users', JSON.stringify(registeredUsers));
-      } catch (_) {}
+      } catch (_) { }
 
       localStorage.setItem(AUTH_STORAGE_KEY, mockToken);
       localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(user));
@@ -1206,7 +1273,7 @@ export const authService = {
                 return syncedUser;
               }
             }
-          } catch (_) {}
+          } catch (_) { }
         }
 
         throw new Error(data.error || 'PIN login failed');
@@ -1279,7 +1346,7 @@ export const authService = {
             if (!qSnap.empty) fsUserDoc = qSnap.docs[0].data();
           }
         }
-      } catch (_) {}
+      } catch (_) { }
 
       const savedPin = fsUserDoc?.pin || localStorage.getItem(`pin_${cleanPhone}`) || localStorage.getItem(`pin_${digits}`) || (digits === '8248843385' ? '5983' : null);
       if ((savedPin && savedPin === pin) || (digits === '8248843385' && pin === '5983')) {
@@ -1288,7 +1355,7 @@ export const authService = {
         const isAdmin = digits === '8248843385';
         const role = isAdmin ? 'Admin' : (fsUserDoc?.role || cachedUser?.role || 'Buyer');
         const prefix = role === 'Admin' ? 'ADM' : role === 'Seller' ? 'SLR' : role === 'Agent' ? 'AGT' : 'USR';
-        
+
         const user: User = {
           id: fsUserDoc?.uid || `usr_${digits}`,
           firebaseUid: fsUserDoc?.uid || `usr_${digits}`,
@@ -1315,16 +1382,16 @@ export const authService = {
         localStorage.setItem(`pin_${digits}`, pin);
         localStorage.setItem('user_pin', pin);
 
-    // Also persist PIN into Cloud Firestore!
-    try {
-      if (digits) {
-        const phoneRef = doc(db, 'users', `usr_${digits}`);
-        setDoc(phoneRef, { pin: String(pin).trim(), updatedAt: serverTimestamp() }, { merge: true }).catch(() => {});
-      }
-    } catch (_) {}
-        
+        // Also persist PIN into Cloud Firestore!
+        try {
+          if (digits) {
+            const phoneRef = doc(db, 'users', `usr_${digits}`);
+            setDoc(phoneRef, { pin: String(pin).trim(), updatedAt: serverTimestamp() }, { merge: true }).catch(() => { });
+          }
+        } catch (_) { }
+
         // Save confirmed user profile in Cloud Firestore to update lastLoginAt
-        this.saveUserProfileToFirestore(user).catch(() => {});
+        this.saveUserProfileToFirestore(user).catch(() => { });
         return user;
       }
 
@@ -1359,7 +1426,7 @@ export const authService = {
   async logout(): Promise<void> {
     try {
       await auth.signOut();
-    } catch (_) {}
+    } catch (_) { }
     localStorage.removeItem(AUTH_STORAGE_KEY);
     localStorage.removeItem(USER_STORAGE_KEY);
   },
@@ -1456,7 +1523,7 @@ export const authService = {
       }
       if (!foundUser) throw new Error('User account not found.');
       if (otp !== '123456') throw new Error('Invalid OTP. Use test code 123456.');
-      
+
       const cleanDigits = foundUser.phone.replace(/\D/g, '').slice(-10);
       localStorage.setItem(`pin_${cleanDigits}`, newPin);
       localStorage.setItem(`pin_+91${cleanDigits}`, newPin);

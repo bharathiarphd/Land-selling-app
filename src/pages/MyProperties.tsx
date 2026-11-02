@@ -36,7 +36,7 @@ export default function MyProperties() {
     if (user?.id) {
       // Simulate network delay
       setTimeout(() => {
-        setProperties(getUserProperties(user.id));
+        setProperties(getUserProperties(user.id, user.phone));
         setLoading(false);
       }, 500);
     } else {

@@ -44,6 +44,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const logout = async () => {
+    if (user) {
+      await authService.saveUserProfileToFirestore(user).catch(() => {});
+    }
     await authService.logout();
     setUser(null);
   };
