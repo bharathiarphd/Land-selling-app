@@ -62,7 +62,7 @@ export function PropertyCard({ property, isFavorite = false, onFavoriteClick }: 
         </div>
 
         {/* Premium/Featured Badge */}
-        {(property.id === 'prop-1' || property.price > 10000000) && (
+        {(property.isFeatured || property.price > 10000000) && (
           <div style={{ position: 'absolute', top: '12px', right: '48px', zIndex: 10, backgroundColor: '#f59e0b', color: 'white', padding: '3px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '4px', boxShadow: '0 2px 4px rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.4)' }}>
             <Sparkles size={12} /> PREMIUM
           </div>

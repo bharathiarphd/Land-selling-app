@@ -35,62 +35,23 @@ export interface PropertyContactRequest {
 
 const STORAGE_KEY = 'land_selling_app_contact_requests';
 
-// Initial demo contact requests for immediate preview & demonstration
-const INITIAL_DEMO_REQUESTS: PropertyContactRequest[] = [
-  {
-    id: 'req_demo_001',
-    propertyId: 'prop-1',
-    propertyTitle: 'Prime Residential Plot near OMR IT Corridor',
-    propertyPrice: 4500000,
-    propertyLocation: 'Sholinganallur, Chennai',
-    propertyImage: 'https://images.unsplash.com/photo-1500382017468-9049fed747ef?w=800&auto=format&fit=crop&q=60',
-    buyerId: 'usr_buyer_1',
-    buyerName: 'Ramesh Kumar',
-    buyerPhone: '9840123456',
-    buyerEmail: 'ramesh.k@example.com',
-    buyerUserId: 'USR-000102',
-    message: 'I liked this land very much and want to buy it immediately. Please share the owner contact details.',
-    sellerId: 'seller-1',
-    sellerName: 'Karthik S.',
-    sellerPhone: '9842112233',
-    sellerType: 'Owner',
-    status: 'Pending',
-    createdAt: new Date(Date.now() - 3600000 * 3).toISOString()
-  },
-  {
-    id: 'req_demo_002',
-    propertyId: 'prop-2',
-    propertyTitle: 'Gated Community Villa Plot with DTCP Approval',
-    propertyPrice: 2800000,
-    propertyLocation: 'Vandalur, Chennai',
-    propertyImage: 'https://images.unsplash.com/photo-1524813686514-a57563d77d66?w=800&auto=format&fit=crop&q=60',
-    buyerId: 'usr_buyer_2',
-    buyerName: 'Priya Sundaram',
-    buyerPhone: '9884567890',
-    buyerEmail: 'priya.s@example.com',
-    buyerUserId: 'USR-000105',
-    message: 'Ready for full payment. Interested in site visit with owner.',
-    sellerId: 'seller-2',
-    sellerName: 'Senthil Nathan',
-    sellerPhone: '9443215678',
-    sellerType: 'Owner',
-    status: 'Approved',
-    createdAt: new Date(Date.now() - 3600000 * 24).toISOString(),
-    reviewedAt: new Date(Date.now() - 3600000 * 12).toISOString(),
-    reviewedBy: 'Admin (8248843385)'
-  }
-];
+const INITIAL_DEMO_REQUESTS: PropertyContactRequest[] = [];
 
 const getStoredRequests = (): PropertyContactRequest[] => {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(INITIAL_DEMO_REQUESTS));
-      return INITIAL_DEMO_REQUESTS;
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) {
+      const realOnly = parsed.filter(r => !r.id.startsWith('req_demo_'));
+      if (realOnly.length !== parsed.length) {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(realOnly));
+      }
+      return realOnly;
     }
-    return JSON.parse(raw);
+    return [];
   } catch {
-    return INITIAL_DEMO_REQUESTS;
+    return [];
   }
 };
 

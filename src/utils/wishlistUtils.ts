@@ -18,61 +18,7 @@ export interface WishItem {
 const USER_WISHES_KEY_PREFIX = 'land_app_wishes_';
 const GLOBAL_WISHES_KEY = 'land_app_global_platform_wishes';
 
-// Initial demo platform wishes so admin and demo accounts have immediate rich data
-const INITIAL_DEMO_WISHES: WishItem[] = [
-  {
-    id: 'wish_1',
-    propertyId: 'prop-1',
-    propertyTitle: 'Prime Residential Plot near OMR IT Corridor',
-    propertyPrice: 4200000,
-    propertyLocation: 'Sholinganallur, Chennai',
-    propertyImage: 'https://images.unsplash.com/photo-1500382017468-9049fed747ef?w=800&auto=format&fit=crop&q=60',
-    userId: 'usr_buyer_1',
-    userName: 'Ramesh Kumar',
-    userPhone: '9840123456',
-    userRole: 'Buyer',
-    createdAt: new Date(Date.now() - 3600000 * 5).toISOString()
-  },
-  {
-    id: 'wish_2',
-    propertyId: 'prop-1',
-    propertyTitle: 'Prime Residential Plot near OMR IT Corridor',
-    propertyPrice: 4200000,
-    propertyLocation: 'Sholinganallur, Chennai',
-    propertyImage: 'https://images.unsplash.com/photo-1500382017468-9049fed747ef?w=800&auto=format&fit=crop&q=60',
-    userId: 'usr_buyer_2',
-    userName: 'Priya Sundar',
-    userPhone: '9876543299',
-    userRole: 'Buyer',
-    createdAt: new Date(Date.now() - 3600000 * 18).toISOString()
-  },
-  {
-    id: 'wish_3',
-    propertyId: 'prop-2',
-    propertyTitle: 'Gated Community Villa Plot with DTCP Approval',
-    propertyPrice: 2600000,
-    propertyLocation: 'Vandalur, Chennai',
-    propertyImage: 'https://images.unsplash.com/photo-1524813686514-a57563d77d66?w=800&auto=format&fit=crop&q=60',
-    userId: 'usr_buyer_1',
-    userName: 'Ramesh Kumar',
-    userPhone: '9840123456',
-    userRole: 'Buyer',
-    createdAt: new Date(Date.now() - 3600000 * 22).toISOString()
-  },
-  {
-    id: 'wish_4',
-    propertyId: 'prop-3',
-    propertyTitle: 'Commercial Land Facing Highway with CMDA Clearance',
-    propertyPrice: 11500000,
-    propertyLocation: 'Sriperumbudur, Kanchipuram',
-    propertyImage: 'https://images.unsplash.com/photo-1513694203232-719a280e022f?w=800&auto=format&fit=crop&q=60',
-    userId: 'usr_1792044993109_42plu',
-    userName: 'Bharathiar',
-    userPhone: '9876543210',
-    userRole: 'Agent',
-    createdAt: new Date(Date.now() - 3600000 * 30).toISOString()
-  }
-];
+const INITIAL_DEMO_WISHES: WishItem[] = [];
 
 export const formatCapitalizedName = (name?: string): string => {
   if (!name) return '';
@@ -86,13 +32,18 @@ export const formatCapitalizedName = (name?: string): string => {
 const getGlobalWishes = (): WishItem[] => {
   try {
     const raw = localStorage.getItem(GLOBAL_WISHES_KEY);
-    if (!raw) {
-      localStorage.setItem(GLOBAL_WISHES_KEY, JSON.stringify(INITIAL_DEMO_WISHES));
-      return INITIAL_DEMO_WISHES;
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) {
+      const realOnly = parsed.filter(w => !['wish_1', 'wish_2', 'wish_3', 'wish_4'].includes(w.id));
+      if (realOnly.length !== parsed.length) {
+        localStorage.setItem(GLOBAL_WISHES_KEY, JSON.stringify(realOnly));
+      }
+      return realOnly;
     }
-    return JSON.parse(raw);
+    return [];
   } catch {
-    return INITIAL_DEMO_WISHES;
+    return [];
   }
 };
 
@@ -122,9 +73,7 @@ export const wishlistUtils = {
         if (Array.isArray(parsed) && parsed.length > 0) return parsed;
       }
 
-      // Default demo wishes for demo user
-      if (userId === 'usr_buyer_1') return ['prop-1', 'prop-2'];
-      if (userId === 'firebase_user_sample_9876543299' || userId === 'usr_buyer_2') return ['prop-1'];
+      // No demo wish fallback
       return [];
     } catch {
       return [];

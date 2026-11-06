@@ -4,174 +4,27 @@ import { BACKEND_URL } from '../config/api';
 const CUSTOM_PROPERTIES_KEY = 'landSellingApp_customProperties';
 const RECENTLY_VIEWED_KEY = 'land_selling_app_recently_viewed';
 
-export const DEFAULT_SEED_PROPERTIES: Property[] = [
-  {
-    id: 'prop-1',
-    title: 'Prime Residential Plot near OMR IT Corridor',
-    description: 'Corner plot with clear DTCP approval, 40ft road frontage, ready for immediate construction.',
-    propertyType: 'Residential Plot',
-    price: 4200000,
-    originalPrice: 4800000,
-    isPriceReduced: true,
-    reducedAmount: 600000,
-    area: 2400,
-    areaUnit: 'Sq.Ft',
-    sqFtRate: 1750,
-    totalSquareFeet: 2400,
-    location: 'Sholinganallur',
-    city: 'Chennai',
-    district: 'Chennai',
-    taluk: 'Tambaram',
-    village: 'Sholinganallur',
-    images: ['https://images.unsplash.com/photo-1500382017468-9049fed747ef?w=800&auto=format&fit=crop&q=60'],
-    facing: 'North-East',
-    roadWidth: 40,
-    electricity: true,
-    water: true,
-    approval: 'DTCP',
-    seller: {
-      id: 'seller-1',
-      name: 'Karthik S.',
-      phone: '9842112233',
-      type: 'Owner',
-      isVerified: true
-    },
-    status: 'Available',
-    dateAdded: '2026-10-10',
-    latitude: 12.9010,
-    longitude: 80.2279,
-    verificationStatus: 'Verified by Platform',
-    views: 142,
-    enquiries: 8
-  },
-  {
-    id: 'prop-2',
-    title: 'Gated Community Villa Plot with DTCP Approval',
-    description: 'Blacktop road, streetlights, 24/7 security in fast developing area near GST road.',
-    propertyType: 'Residential Plot',
-    price: 2500000,
-    originalPrice: 2800000,
-    isPriceReduced: true,
-    reducedAmount: 300000,
-    area: 1500,
-    areaUnit: 'Sq.Ft',
-    sqFtRate: 1667,
-    totalSquareFeet: 1500,
-    location: 'Vandalur',
-    city: 'Chennai',
-    district: 'Chennai',
-    taluk: 'Chengalpattu',
-    village: 'Otteri',
-    images: ['https://images.unsplash.com/photo-1524813686514-a57563d77d66?w=800&auto=format&fit=crop&q=60'],
-    facing: 'East',
-    roadWidth: 30,
-    electricity: true,
-    water: true,
-    approval: 'DTCP',
-    seller: {
-      id: 'seller-2',
-      name: 'Senthil Nathan',
-      phone: '9443215678',
-      type: 'Owner',
-      isVerified: true
-    },
-    status: 'Available',
-    dateAdded: '2026-10-12',
-    latitude: 12.8913,
-    longitude: 80.0811,
-    verificationStatus: 'Verified by Platform',
-    views: 89,
-    enquiries: 5
-  },
-  {
-    id: 'prop-3',
-    title: 'Commercial Land Facing 6-Lane Highway',
-    description: 'Ideal for showroom, warehouse, or commercial complex. Excellent connectivity.',
-    propertyType: 'Commercial Land',
-    price: 11500000,
-    area: 4800,
-    areaUnit: 'Sq.Ft',
-    sqFtRate: 2396,
-    totalSquareFeet: 4800,
-    location: 'Sriperumbudur',
-    city: 'Kanchipuram',
-    district: 'Kanchipuram',
-    taluk: 'Sriperumbudur',
-    village: 'Mambakkam',
-    images: ['https://images.unsplash.com/photo-1513694203232-719a280e022f?w=800&auto=format&fit=crop&q=60'],
-    facing: 'North',
-    roadWidth: 60,
-    electricity: true,
-    water: true,
-    approval: 'CMDA',
-    seller: {
-      id: 'seller-3',
-      name: 'Raja Builders & Promoters',
-      phone: '9840998877',
-      type: 'Developer',
-      isVerified: true
-    },
-    status: 'Available',
-    dateAdded: '2026-10-14',
-    latitude: 12.9675,
-    longitude: 79.9436,
-    verificationStatus: 'Verified by Platform',
-    views: 210,
-    enquiries: 12
-  },
-  {
-    id: 'prop-4',
-    title: 'Fertile Agricultural Land with Free Borewell & EB Service',
-    description: 'Red soil, copiously yielding coconut grove with drip irrigation installed.',
-    propertyType: 'Agricultural Land',
-    price: 3600000,
-    originalPrice: 4000000,
-    isPriceReduced: true,
-    reducedAmount: 400000,
-    area: 2,
-    areaUnit: 'Acre',
-    sqFtRate: 41,
-    totalSquareFeet: 87120,
-    location: 'Pollachi',
-    city: 'Pollachi',
-    district: 'Coimbatore',
-    taluk: 'Pollachi',
-    village: 'Negamam',
-    images: ['https://images.unsplash.com/photo-1500382017468-9049fed747ef?w=800&auto=format&fit=crop&q=60'],
-    facing: 'South',
-    roadWidth: 20,
-    electricity: true,
-    water: true,
-    approval: 'Panchayat',
-    seller: {
-      id: 'seller-4',
-      name: 'Murugan Palanisamy',
-      phone: '9842554433',
-      type: 'Owner',
-      isVerified: true
-    },
-    status: 'Available',
-    dateAdded: '2026-10-15',
-    latitude: 10.6609,
-    longitude: 77.0048,
-    verificationStatus: 'Verified by Platform',
-    views: 165,
-    enquiries: 9
-  }
-];
+export const DEFAULT_SEED_PROPERTIES: Property[] = [];
 
 export const getCustomProperties = (): Property[] => {
   const data = localStorage.getItem(CUSTOM_PROPERTIES_KEY);
   if (data) {
     try {
       const parsed = JSON.parse(data);
-      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      if (Array.isArray(parsed)) {
+        const realOnly = parsed.filter((p: Property) => 
+          p && p.id && !['prop-1', 'prop-2', 'prop-3', 'prop-4'].includes(p.id)
+        );
+        if (realOnly.length !== parsed.length) {
+          localStorage.setItem(CUSTOM_PROPERTIES_KEY, JSON.stringify(realOnly));
+        }
+        return realOnly;
+      }
     } catch {
-      return DEFAULT_SEED_PROPERTIES;
+      return [];
     }
   }
-  localStorage.setItem(CUSTOM_PROPERTIES_KEY, JSON.stringify(DEFAULT_SEED_PROPERTIES));
-  return DEFAULT_SEED_PROPERTIES;
+  return [];
 };
 
 export const syncPropertiesFromBackend = async (): Promise<Property[]> => {
@@ -180,10 +33,12 @@ export const syncPropertiesFromBackend = async (): Promise<Property[]> => {
     if (res.ok) {
       const data = await res.json();
       if (Array.isArray(data)) {
-        const formatted = data.map((item: any) => ({
-          ...item,
-          id: item._id || item.id
-        }));
+        const formatted = data
+          .filter((item: any) => !['prop-1', 'prop-2', 'prop-3', 'prop-4'].includes(item._id || item.id))
+          .map((item: any) => ({
+            ...item,
+            id: item._id || item.id
+          }));
         localStorage.setItem(CUSTOM_PROPERTIES_KEY, JSON.stringify(formatted));
         return formatted;
       }
