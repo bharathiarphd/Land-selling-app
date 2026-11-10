@@ -4,6 +4,7 @@ import { Input } from '../Input';
 import { Checkbox } from '../Checkbox';
 import type { FilterOptions } from '../../utils/searchUtils';
 import { useLanguage } from '../../context/LanguageContext';
+import { TAMIL_NADU_DISTRICTS } from '../../data/tamilNaduDistricts';
 import styles from './SearchComponents.module.css';
 
 interface FilterSectionsProps {
@@ -60,11 +61,13 @@ export const FilterSections: React.FC<FilterSectionsProps> = ({ filters, setFilt
           value={filters.district || ''} 
           onChange={e => updateFilter('district', e.target.value)}
           options={[
-            {value: '', label: t('filters.allDistricts')}, 
-            {value: 'Chennai', label: t('language') === 'ta' ? 'சென்னை' : 'Chennai'}, 
-            {value: 'Coimbatore', label: t('language') === 'ta' ? 'கோயம்புத்தூர்' : 'Coimbatore'}, 
-            {value: 'Villupuram', label: t('language') === 'ta' ? 'விழுப்புரம்' : 'Villupuram'}, 
-            {value: 'Tindivanam', label: t('language') === 'ta' ? 'திண்டிவனம்' : 'Tindivanam'}
+            { value: '', label: t('filters.allDistricts') },
+            ...TAMIL_NADU_DISTRICTS.map(d => ({
+              value: d.name,
+              label: t('language') === 'ta' 
+                ? `${d.code} - ${d.nameTa} (${d.name})` 
+                : `${d.code} - ${d.name} (${d.nameTa})`
+            }))
           ]}
           style={{ marginBottom: '8px' }}
         />

@@ -6,7 +6,8 @@ import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { Select } from '../components/Select';
 import { LandLocationPicker, type GeocodedLocationData } from '../components/LandLocationPicker';
-import { createProperty, getPropertyById, updateProperty } from '../utils/propertyUtils';
+import { createProperty, getPropertyById, updateProperty, getCustomProperties } from '../utils/propertyUtils';
+import { TAMIL_NADU_DISTRICTS, findDistrict, findTaluk, generateStandardPropertyId, previewStandardPropertyId } from '../data/tamilNaduDistricts';
 import type { Property } from '../data/mockProperties';
 import styles from './AddProperty.module.css';
 import { EmptyState } from '../components/EmptyState';
@@ -167,6 +168,9 @@ export default function AddProperty() {
         );
         const rate = existing.sqFtRate || (sqftTotal > 0 ? Math.round(existing.price / sqftTotal) : 0);
 
+        const resolvedDist = findDistrict(existing.district);
+        const resolvedTaluk = resolvedDist ? findTaluk(resolvedDist, existing.taluk) : undefined;
+
         setFormData({
           title: existing.title,
           propertyType: existing.propertyType,
@@ -178,8 +182,8 @@ export default function AddProperty() {
           location: {
             state: 'Tamil Nadu',
             city: existing.city || existing.district || '',
-            district: existing.district,
-            taluk: existing.taluk,
+            district: resolvedDist ? resolvedDist.name : existing.district,
+            taluk: resolvedTaluk ? resolvedTaluk.name : existing.taluk,
             village: existing.village,
             address: existing.location,
             pincode: existing.pincode || ''
@@ -204,7 +208,14 @@ export default function AddProperty() {
     const draft = localStorage.getItem(DRAFT_KEY);
     if (draft && hasDraftPrompt) {
       if (window.confirm(language === 'ta' ? 'உங்கள் சேமிக்கப்பட்ட வரைவை தொடர விரும்புகிறீர்களா?' : 'Continue your saved draft?')) {
-        setFormData(JSON.parse(draft));
+        const parsedDraft = JSON.parse(draft);
+        if (parsedDraft?.location) {
+          const d = findDistrict(parsedDraft.location.district);
+          const tk = d ? findTaluk(d, parsedDraft.location.taluk) : undefined;
+          if (d) parsedDraft.location.district = d.name;
+          if (tk) parsedDraft.location.taluk = tk.name;
+        }
+        setFormData(parsedDraft);
       } else {
         localStorage.removeItem(DRAFT_KEY);
       }
@@ -292,17 +303,43 @@ export default function AddProperty() {
 
   const handleCityChange = (cityName: string) => {
     const lower = cityName.trim().toLowerCase();
-    const matchedDistrict = CITY_TO_DISTRICT[lower];
-    setFormData(prev => ({
-      ...prev,
-      location: {
-        ...prev.location,
-        city: cityName,
-        district: matchedDistrict || prev.location.district || cityName,
-        village: prev.location.village || cityName
+    const mappedDistName = CITY_TO_DISTRICT[lower];
+    let matchedDist = mappedDistName ? findDistrict(mappedDistName) : findDistrict(cityName);
+    let matchedTaluk = matchedDist ? findTaluk(matchedDist, cityName) : undefined;
+
+    if (!matchedDist && cityName.trim().length >= 3) {
+      for (const dist of TAMIL_NADU_DISTRICTS) {
+        const tk = findTaluk(dist, cityName);
+        if (tk) {
+          matchedDist = dist;
+          matchedTaluk = tk;
+          break;
+        }
       }
-    }));
-    setErrors(prev => ({ ...prev, city: '', district: '', village: '' }));
+    }
+
+    setFormData(prev => {
+      const nextDistrict = matchedDist ? matchedDist.name : (mappedDistName || prev.location.district);
+      const nextDistObj = findDistrict(nextDistrict);
+      let nextTaluk = '';
+      if (matchedTaluk) {
+        nextTaluk = matchedTaluk.name;
+      } else if (nextDistObj && prev.location.taluk && findTaluk(nextDistObj, prev.location.taluk)) {
+        nextTaluk = prev.location.taluk;
+      }
+
+      return {
+        ...prev,
+        location: {
+          ...prev.location,
+          city: cityName,
+          district: nextDistrict,
+          taluk: nextTaluk,
+          village: prev.location.village || cityName
+        }
+      };
+    });
+    setErrors(prev => ({ ...prev, city: '', district: '', taluk: '', village: '' }));
   };
 
   const validateStep = (currentStep: number) => {
@@ -322,6 +359,7 @@ export default function AddProperty() {
         newErrors.city = language === 'ta' ? 'நகரம் அல்லது மாவட்டம் தேவை' : 'City or District is required';
       }
       if (!formData.location.district?.trim()) newErrors.district = language === 'ta' ? 'மாவட்டம் தேவை' : 'District is required';
+      if (!formData.location.taluk?.trim()) newErrors.taluk = language === 'ta' ? 'தாலுகா தேவை' : 'Taluk is required';
       if (!formData.location.village?.trim() && !formData.location.city?.trim()) newErrors.village = language === 'ta' ? 'கிராமம் / நகரம் தேவை' : 'Village/Town is required';
       if (formData.location.pincode && !/^\d{6}$/.test(formData.location.pincode)) {
         newErrors.pincode = language === 'ta' ? '6-இலக்க சரியான அஞ்சல் குறியீடாக இருக்க வேண்டும்' : 'Must be a 6-digit valid pincode';
@@ -346,7 +384,16 @@ export default function AddProperty() {
     try {
       await new Promise(resolve => setTimeout(resolve, 1500));
       
+      const finalPropertyId = editId 
+        ? editId 
+        : generateStandardPropertyId(
+            formData.location.district,
+            formData.location.taluk,
+            getCustomProperties()
+          );
+
       const payload: Partial<Property> = {
+        id: finalPropertyId,
         title: formData.title,
         description: formData.description,
         propertyType: formData.propertyType as any,
@@ -675,20 +722,118 @@ export default function AddProperty() {
                 </div>
               </div>
 
-              <Input 
-                label={language === 'ta' ? 'மாவட்டம் (District)' : 'District'} 
-                placeholder="e.g. Villupuram"
+              {/* District Select - All 38 Tamil Nadu Official Districts with codes */}
+              <Select 
+                label={language === 'ta' ? 'மாவட்டம் (District - குறியீடு 01-38)' : 'District (Code 01-38)'} 
                 value={formData.location.district}
-                onChange={e => { setFormData({...formData, location: {...formData.location, district: e.target.value}}); setErrors({...errors, district: ''}); }}
+                onChange={e => {
+                  const selectedDist = e.target.value;
+                  setFormData(prev => ({
+                    ...prev,
+                    location: {
+                      ...prev.location,
+                      district: selectedDist,
+                      taluk: ''
+                    }
+                  }));
+                  setErrors(prev => ({ ...prev, district: '' }));
+                }}
+                options={[
+                  { value: '', label: language === 'ta' ? '-- மாவட்டத்தைத் தேர்ந்தெடுக்கவும் --' : '-- Select District --' },
+                  ...TAMIL_NADU_DISTRICTS.map(d => ({
+                    value: d.name,
+                    label: language === 'ta' 
+                      ? `${d.code} - ${d.nameTa} (${d.name})` 
+                      : `${d.code} - ${d.name} (${d.nameTa})`
+                  }))
+                ]}
                 error={errors.district}
               />
-              <Input 
-                label={language === 'ta' ? 'தாலுகா (Taluk)' : 'Taluk'} 
-                placeholder="e.g. Tindivanam"
-                value={formData.location.taluk}
-                onChange={e => { setFormData({...formData, location: {...formData.location, taluk: e.target.value}}); setErrors({...errors, taluk: ''}); }}
-                error={errors.taluk}
-              />
+
+              {/* Taluk Select - Dynamically populated per selected district with codes */}
+              {(() => {
+                const currentDistObj = findDistrict(formData.location.district);
+                const talukList = currentDistObj ? currentDistObj.taluks : [];
+                return (
+                  <Select 
+                    label={language === 'ta' ? 'தாலுகா (Taluk - குறியீடு 01-12)' : 'Taluk (Code 01-12)'} 
+                    value={formData.location.taluk}
+                    onChange={e => {
+                      setFormData(prev => ({
+                        ...prev,
+                        location: {
+                          ...prev.location,
+                          taluk: e.target.value
+                        }
+                      }));
+                      setErrors(prev => ({ ...prev, taluk: '' }));
+                    }}
+                    options={[
+                      { 
+                        value: '', 
+                        label: currentDistObj 
+                          ? (language === 'ta' ? '-- தாலுகாவைத் தேர்ந்தெடுக்கவும் --' : '-- Select Taluk --') 
+                          : (language === 'ta' ? '-- முதலில் மாவட்டத்தைத் தேர்ந்தெடுக்கவும் --' : '-- Select District First --') 
+                      },
+                      ...talukList.map(t => ({
+                        value: t.name,
+                        label: `${t.code} - ${t.name}${t.nameTa ? ` (${t.nameTa})` : ''}`
+                      }))
+                    ]}
+                    error={errors.taluk}
+                  />
+                );
+              })()}
+
+              {/* Live Official Property ID Format Preview Banner */}
+              {(() => {
+                const matchedDist = findDistrict(formData.location.district);
+                const matchedTaluk = matchedDist ? findTaluk(matchedDist, formData.location.taluk) : undefined;
+                const distCode = matchedDist ? matchedDist.code : '??';
+                const talukCode = matchedTaluk ? matchedTaluk.code : '??';
+                const isReady = distCode !== '??' && talukCode !== '??';
+                return (
+                  <div style={{
+                    gridColumn: '1 / -1',
+                    padding: '12px 16px',
+                    backgroundColor: isReady ? 'rgba(34, 197, 94, 0.08)' : 'rgba(2, 132, 199, 0.06)',
+                    border: `1.5px solid ${isReady ? 'rgba(34, 197, 94, 0.35)' : 'rgba(2, 132, 199, 0.25)'}`,
+                    borderRadius: 'var(--radius-md)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    flexWrap: 'wrap',
+                    gap: '10px'
+                  }}>
+                    <div>
+                      <div style={{ fontSize: '0.88rem', fontWeight: 700, color: isReady ? '#166534' : 'var(--color-primary-dark)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <span>🏷️</span>
+                        <span>{language === 'ta' ? 'அதிகாரப்பூர்வ சொத்து எண் வடிவம் (Property ID Format):' : 'Official Property ID Format (8 Digits):'}</span>
+                      </div>
+                      <div style={{ fontSize: '0.8rem', color: 'var(--color-text-secondary)', marginTop: '3px' }}>
+                        {language === 'ta'
+                          ? `மாவட்டம் (${distCode}) + தாலுகா (${talukCode}) + 4-இலக்க வரிசை எண் (DDTTSSSS)`
+                          : `District (${distCode}) + Taluk (${talukCode}) + 4-Digit Sequence (DDTTSSSS)`}
+                      </div>
+                    </div>
+                    <div style={{
+                      fontFamily: 'monospace',
+                      fontWeight: 800,
+                      fontSize: '1.15rem',
+                      letterSpacing: '2px',
+                      padding: '5px 12px',
+                      borderRadius: '6px',
+                      backgroundColor: isReady ? '#dcfce7' : '#f1f5f9',
+                      color: isReady ? '#14532d' : '#475569',
+                      border: `1.5px solid ${isReady ? '#86efac' : '#cbd5e1'}`,
+                      boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+                    }}>
+                      {distCode}{talukCode}XXXX
+                    </div>
+                  </div>
+                );
+              })()}
+
               <Input 
                 label={language === 'ta' ? 'கிராமம் / பகுதி (Village / Area)' : 'Village / Area'} 
                 placeholder="Enter village or area"
@@ -748,21 +893,38 @@ export default function AddProperty() {
                   }));
                 }}
                 onAutofillFormFields={(data: GeocodedLocationData) => {
-                  setFormData(prev => ({
-                    ...prev,
-                    location: {
-                      ...prev.location,
-                      latitude: data.latitude,
-                      longitude: data.longitude,
-                      address: data.address || prev.location.address,
-                      district: data.district || prev.location.district,
-                      taluk: data.taluk || prev.location.taluk,
-                      village: data.village || prev.location.village,
-                      city: data.city || prev.location.city,
-                      pincode: data.pincode ? data.pincode.replace(/\D/g, '') : prev.location.pincode,
-                      state: data.state || prev.location.state || 'Tamil Nadu'
+                  setFormData(prev => {
+                    const matchedDist = findDistrict(data.district) || findDistrict(data.city);
+                    const distName = matchedDist ? matchedDist.name : (data.district || prev.location.district);
+                    const distObj = findDistrict(distName);
+                    let talukName = '';
+                    if (distObj) {
+                      const matchedTaluk = findTaluk(distObj, data.taluk) || findTaluk(distObj, data.city);
+                      if (matchedTaluk) {
+                        talukName = matchedTaluk.name;
+                      } else if (prev.location.taluk && findTaluk(distObj, prev.location.taluk)) {
+                        talukName = prev.location.taluk;
+                      }
+                    } else {
+                      talukName = data.taluk || prev.location.taluk;
                     }
-                  }));
+
+                    return {
+                      ...prev,
+                      location: {
+                        ...prev.location,
+                        latitude: data.latitude,
+                        longitude: data.longitude,
+                        address: data.address || prev.location.address,
+                        district: distName,
+                        taluk: talukName,
+                        village: data.village || prev.location.village,
+                        city: data.city || prev.location.city,
+                        pincode: data.pincode ? data.pincode.replace(/\D/g, '') : prev.location.pincode,
+                        state: data.state || prev.location.state || 'Tamil Nadu'
+                      }
+                    };
+                  });
                   // Clear errors for auto-filled fields
                   setErrors(prev => ({
                     ...prev,
@@ -969,6 +1131,33 @@ export default function AddProperty() {
                   </div>
                 </div>
 
+                {/* Official Property Code Preview */}
+                <div style={{
+                  padding: '12px 16px',
+                  backgroundColor: '#f0fdf4',
+                  border: '1.5px solid #86efac',
+                  borderRadius: 'var(--radius-md)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  flexWrap: 'wrap',
+                  gap: '8px',
+                  marginBottom: 'var(--spacing-4)'
+                }}>
+                  <div>
+                    <div style={{ fontSize: '0.88rem', fontWeight: 700, color: '#166534', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <span>🏷️</span>
+                      <span>{language === 'ta' ? 'அதிகாரப்பூர்வ சொத்து எண் (Property Code):' : 'Official Property ID (Code):'}</span>
+                    </div>
+                    <div style={{ fontSize: '0.78rem', color: '#15803d', marginTop: '2px' }}>
+                      {language === 'ta' ? 'மாவட்டம் + தாலுகா + 4-இலக்க வரிசை எண் (DDTTSSSS)' : 'District + Taluk + 4-digit sequence (DDTTSSSS)'}
+                    </div>
+                  </div>
+                  <span style={{ fontFamily: 'monospace', fontWeight: 800, fontSize: '1.2rem', color: '#14532d', letterSpacing: '2px' }}>
+                    {editId || previewStandardPropertyId(formData.location.district, formData.location.taluk, getCustomProperties())}
+                  </span>
+                </div>
+
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--spacing-2)', fontSize: 'var(--font-size-sm)', marginBottom: 'var(--spacing-4)' }}>
                   <div><strong>Type:</strong> {formData.propertyType}</div>
                   <div><strong>Rate:</strong> ₹{formData.sqFtRate?.toLocaleString('en-IN') || 0} / sq.ft</div>
@@ -976,6 +1165,7 @@ export default function AddProperty() {
                   <div><strong>Area:</strong> {formData.area} {formData.areaUnit}</div>
                   <div><strong>City:</strong> {formData.location.city || formData.location.district || '-'}</div>
                   <div><strong>District:</strong> {formData.location.district || '-'}</div>
+                  <div><strong>Taluk:</strong> {formData.location.taluk || '-'}</div>
                   <div><strong>Facing:</strong> {formData.details.facing || '-'}</div>
                   <div><strong>Approval:</strong> {formData.details.approval || '-'}</div>
                 </div>

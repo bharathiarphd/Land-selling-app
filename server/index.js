@@ -202,6 +202,7 @@ const userSchema = new mongoose.Schema({
 const User = mongoose.model('User', userSchema);
 
 const propertySchema = new mongoose.Schema({
+  id: { type: String, index: true },
   title: { type: String, required: true },
   description: { type: String },
   propertyType: { type: String },
@@ -1274,13 +1275,19 @@ app.get('/api/properties', async (req, res) => {
   }
 });
 
+const buildPropertyIdQuery = (id) => {
+  return mongoose.Types.ObjectId.isValid(id) ? { $or: [{ id }, { _id: id }] } : { id };
+};
+
 // Get property by ID
 app.get('/api/properties/:id', async (req, res) => {
   try {
     const id = req.params.id;
     let property = null;
     if (isMongoConnected()) {
-      try { property = await Property.findById(id); } catch (_) {}
+      try { 
+        property = await Property.findOne(buildPropertyIdQuery(id)); 
+      } catch (_) {}
     }
     if (!property) {
       property = localDb.properties.find(p => p.id === id || p._id === id);
@@ -1295,15 +1302,16 @@ app.get('/api/properties/:id', async (req, res) => {
 // Create new property
 app.post('/api/properties', async (req, res) => {
   try {
-    const id = `prop_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
-    const propData = { ...req.body, _id: id, id, createdAt: new Date() };
+    const { _id: ignoredId, ...bodyFields } = req.body || {};
+    const id = bodyFields.id || ignoredId || `prop_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+    const propData = { ...bodyFields, _id: id, id, createdAt: new Date() };
 
     if (isMongoConnected()) {
       try {
-        const newProperty = new Property(req.body);
+        const newProperty = new Property({ ...bodyFields, id });
         await newProperty.save();
-        propData._id = newProperty._id;
-        propData.id = newProperty._id.toString();
+        propData._id = newProperty._id.toString();
+        propData.id = id;
       } catch (_) {}
     }
 
@@ -1320,15 +1328,16 @@ app.post('/api/properties', async (req, res) => {
 app.put('/api/properties/:id', async (req, res) => {
   try {
     const id = req.params.id;
+    const { _id: ignoredId, ...updateFields } = req.body || {};
     let updated = null;
     if (isMongoConnected()) {
       try {
-        updated = await Property.findByIdAndUpdate(id, req.body, { new: true });
+        updated = await Property.findOneAndUpdate(buildPropertyIdQuery(id), updateFields, { new: true });
       } catch (_) {}
     }
     const idx = localDb.properties.findIndex(p => p.id === id || p._id === id);
     if (idx >= 0) {
-      localDb.properties[idx] = { ...localDb.properties[idx], ...req.body };
+      localDb.properties[idx] = { ...localDb.properties[idx], ...updateFields };
       saveLocalDb(localDb);
       if (!updated) updated = localDb.properties[idx];
     }
@@ -1344,7 +1353,7 @@ app.delete('/api/properties/:id', async (req, res) => {
   try {
     const id = req.params.id;
     if (isMongoConnected()) {
-      try { await Property.findByIdAndDelete(id); } catch (_) {}
+      try { await Property.findOneAndDelete(buildPropertyIdQuery(id)); } catch (_) {}
     }
     localDb.properties = localDb.properties.filter(p => p.id !== id && p._id !== id);
     saveLocalDb(localDb);

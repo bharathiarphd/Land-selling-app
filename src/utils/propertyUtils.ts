@@ -1,5 +1,6 @@
 import { type Property } from '../data/mockProperties';
 import { BACKEND_URL } from '../config/api';
+import { generateStandardPropertyId } from '../data/tamilNaduDistricts';
 
 const CUSTOM_PROPERTIES_KEY = 'landSellingApp_customProperties';
 const RECENTLY_VIEWED_KEY = 'land_selling_app_recently_viewed';
@@ -34,10 +35,10 @@ export const syncPropertiesFromBackend = async (): Promise<Property[]> => {
       const data = await res.json();
       if (Array.isArray(data)) {
         const formatted = data
-          .filter((item: any) => !['prop-1', 'prop-2', 'prop-3', 'prop-4'].includes(item._id || item.id))
+          .filter((item: any) => !['prop-1', 'prop-2', 'prop-3', 'prop-4'].includes(item.id || item._id))
           .map((item: any) => ({
             ...item,
-            id: item._id || item.id
+            id: item.id || item._id
           }));
         localStorage.setItem(CUSTOM_PROPERTIES_KEY, JSON.stringify(formatted));
         return formatted;
@@ -58,13 +59,19 @@ export const getAllProperties = (): Property[] => {
 };
 
 export const createProperty = (propertyData: Partial<Property>): Property => {
+  const customProps = getCustomProperties();
+  
+  // Enforce official 8-digit property ID: [2-digit District Code][2-digit Taluk Code][4-digit Sequence]
+  const id = (propertyData.id && /^\d{8}$/.test(propertyData.id))
+    ? propertyData.id
+    : generateStandardPropertyId(propertyData.district, propertyData.taluk, customProps);
+
   const newProperty: Property = {
     ...propertyData,
-    id: propertyData.id || `prop_${Date.now()}`,
+    id,
     status: propertyData.status || 'Available'
   } as Property;
 
-  const customProps = getCustomProperties();
   customProps.unshift(newProperty);
   localStorage.setItem(CUSTOM_PROPERTIES_KEY, JSON.stringify(customProps));
 

@@ -186,6 +186,29 @@ export default function PropertyDetail() {
               <MapPin size={16} />
               {property.city && property.city !== property.district ? `${property.city}, ` : ''}{property.location}, {property.district}, Tamil Nadu
             </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '6px', flexWrap: 'wrap' }}>
+              <span style={{
+                fontFamily: 'monospace',
+                fontWeight: 700,
+                fontSize: '0.84rem',
+                backgroundColor: 'rgba(2, 132, 199, 0.08)',
+                color: 'var(--color-primary, #0284c7)',
+                padding: '2px 8px',
+                borderRadius: '6px',
+                border: '1px solid rgba(2, 132, 199, 0.25)',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px'
+              }}>
+                <span>ID:</span>
+                <span>{property.id}</span>
+              </span>
+              {property.taluk && (
+                <span style={{ fontSize: '0.82rem', color: 'var(--color-text-secondary)' }}>
+                  • {language === 'ta' ? 'தாலுகா:' : 'Taluk:'} {property.taluk}
+                </span>
+              )}
+            </div>
           </div>
 
           <section className={styles.section}>
